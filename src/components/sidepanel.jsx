@@ -9,7 +9,7 @@ import {
   ReferenceLine,
 } from "recharts";
 
-// Key determinands the public would care about, with WFD-style thresholds
+// Key determinands the public would care about, with WFD-style thresholds 
 const DETERMINAND_INFO = {
   "0111": {
     name: "Ammonia",
