@@ -131,6 +131,68 @@ function sortGroups(groups) {
   });
 }
 
+/* ── Shared time axis helpers ──────────────────────────────── */
+
+function computeSharedTimeDomain(groups) {
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const g of Object.values(groups)) {
+    for (const d of g.data) {
+      if (d.timestamp < min) min = d.timestamp;
+      if (d.timestamp > max) max = d.timestamp;
+    }
+  }
+
+  if (min === Infinity) return { domain: [0, 1], ticks: [] };
+
+  // Snap domain to Jan 1st of the bounding years
+  const minDate = new Date(min);
+  const maxDate = new Date(max);
+  const startYear = minDate.getFullYear();
+  const endYear = maxDate.getFullYear() + 1;
+  const domainMin = new Date(startYear, 0, 1).getTime();
+  const domainMax = new Date(endYear, 0, 1).getTime();
+
+  const yearSpan = endYear - startYear;
+
+  // Choose tick interval based on data span
+  const ticks = [];
+  if (yearSpan <= 3) {
+    // Quarterly ticks
+    for (let y = startYear; y <= endYear; y++) {
+      for (let q = 0; q < 4; q++) {
+        const t = new Date(y, q * 3, 1).getTime();
+        if (t >= domainMin && t <= domainMax) ticks.push(t);
+      }
+    }
+  } else if (yearSpan <= 10) {
+    // Yearly ticks
+    for (let y = startYear; y <= endYear; y++) {
+      ticks.push(new Date(y, 0, 1).getTime());
+    }
+  } else {
+    // Every 2 or 5 years
+    const step = yearSpan <= 20 ? 2 : 5;
+    const firstTick = Math.ceil(startYear / step) * step;
+    for (let y = firstTick; y <= endYear; y += step) {
+      ticks.push(new Date(y, 0, 1).getTime());
+    }
+  }
+
+  return { domain: [domainMin, domainMax], ticks, yearSpan };
+}
+
+function formatTickLabel(timestamp, yearSpan) {
+  const d = new Date(timestamp);
+  if (yearSpan <= 3) {
+    // Show "Jan 20", "Apr 20" etc for quarterly
+    return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+  }
+  // Just show year for longer spans
+  return d.getFullYear().toString();
+}
+
 /* ── Animations ────────────────────────────────────────────── */
 
 const styleSheet = `
@@ -196,7 +258,7 @@ function SkeletonChart({ delay = 0 }) {
 
 /* ── Chart component ───────────────────────────────────────── */
 
-function DeterminandChart({ group, animDelay = 0, isStreaming }) {
+function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain }) {
   const info = DETERMINAND_INFO[group.code];
   const displayName = info?.name || group.name;
   const description = info?.description || "";
@@ -244,10 +306,7 @@ function DeterminandChart({ group, animDelay = 0, isStreaming }) {
     }
   }
 
-  const formatDate = (timestamp) => {
-    const d = new Date(timestamp);
-    return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
-  };
+  const yearSpan = timeDomain?.yearSpan || 10;
 
   return (
     <div
@@ -327,11 +386,14 @@ function DeterminandChart({ group, animDelay = 0, isStreaming }) {
           >
             <XAxis
               dataKey="timestamp"
-              tickFormatter={formatDate}
+              type="number"
+              scale="time"
+              domain={timeDomain?.domain || ["dataMin", "dataMax"]}
+              ticks={timeDomain?.ticks}
+              tickFormatter={(ts) => formatTickLabel(ts, yearSpan)}
               tick={{ fontSize: 10, fill: "#94a3b8" }}
               axisLine={{ stroke: "#e2e8f0" }}
               tickLine={false}
-              minTickGap={40}
             />
             <YAxis
               tick={{ fontSize: 10, fill: "#94a3b8" }}
@@ -459,6 +521,7 @@ export default function SidePanel({ point, onClose }) {
 
   const isOpen = point.samplingPointStatus?.notation !== "C";
   const sortedGroups = sortGroups(observations);
+  const timeDomain = computeSharedTimeDomain(observations);
   const pct =
     progress.total > 0
       ? Math.round((progress.loaded / progress.total) * 100)
@@ -626,6 +689,7 @@ export default function SidePanel({ point, onClose }) {
             group={group}
             animDelay={i * 60}
             isStreaming={loading}
+            timeDomain={timeDomain}
           />
         ))}
 
