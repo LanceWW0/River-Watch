@@ -59,7 +59,7 @@ export default function MapView() {
     const bounds = map.getBounds();
     const radius = Math.min(
       Math.round(center.distanceTo(bounds.getNorthEast()) / 1000),
-      40
+      40,
     );
 
     if (radius < 1) return;
@@ -70,14 +70,17 @@ export default function MapView() {
     try {
       const firstRes = await fetch(
         `/api/sampling-point?latitude=${center.lat}&longitude=${center.lng}&radius=${radius}&skip=0&limit=250`,
-        {
-          headers: {
-            accept: "application/ld+json",
-            "API-Version": "1",
-          },
-          signal: controller.signal,
-        }
+        { signal: controller.signal },
       );
+
+      console.log(firstRes);
+
+      if (!firstRes.ok) {
+        const text = await firstRes.text();
+        console.error("API error:", firstRes.status, text);
+        return;
+      }
+
       const firstData = await firstRes.json();
       const total = firstData.totalItems || 0;
       let allMembers = [...(firstData.member || [])];
@@ -110,9 +113,9 @@ export default function MapView() {
                     "API-Version": "1",
                   },
                   signal: controller.signal,
-                }
-              ).then((r) => r.json())
-            )
+                },
+              ).then((r) => r.json()),
+            ),
           );
 
           for (const data of results) {
@@ -142,7 +145,16 @@ export default function MapView() {
   const pointsArray = Object.values(points);
 
   return (
-    <div style={{ height: "100vh", width: "100%", position: "relative", paddingTop: "4rem", boxSizing: "border-box", overflow: "hidden" }}>
+    <div
+      style={{
+        height: "100vh",
+        width: "100%",
+        position: "relative",
+        paddingTop: "4rem",
+        boxSizing: "border-box",
+        overflow: "hidden",
+      }}
+    >
       {progress && (
         <div
           style={{
@@ -183,31 +195,21 @@ export default function MapView() {
           showCoverageOnHover={false}
         >
           {pointsArray.map((point, i) => {
-            const coords = bngToLatLng(point.geometry?.asWKT);
+            const wkt = point?.geometry?.asWKT;
+            const coords = bngToLatLng(wkt);
             if (!coords) return null;
 
             const isOpen = point.samplingPointStatus?.notation !== "C";
-            const isSelected =
-              selectedPoint?.notation === point.notation;
+            const isSelected = selectedPoint?.notation === point.notation;
 
             return (
               <CircleMarker
                 key={point.notation || i}
                 center={coords}
                 radius={isSelected ? 9 : 6}
-                color={
-                  isSelected
-                    ? "#1d4ed8"
-                    : isOpen
-                      ? "#2563eb"
-                      : "#9ca3af"
-                }
+                color={isSelected ? "#1d4ed8" : isOpen ? "#2563eb" : "#9ca3af"}
                 fillColor={
-                  isSelected
-                    ? "#2563eb"
-                    : isOpen
-                      ? "#3b82f6"
-                      : "#d1d5db"
+                  isSelected ? "#2563eb" : isOpen ? "#3b82f6" : "#d1d5db"
                 }
                 fillOpacity={isSelected ? 1 : 0.7}
                 weight={isSelected ? 3 : 1}
@@ -220,10 +222,7 @@ export default function MapView() {
         </MarkerClusterGroup>
       </MapContainer>
 
-      <SidePanel
-        point={selectedPoint}
-        onClose={() => setSelectedPoint(null)}
-      />
+      <SidePanel point={selectedPoint} onClose={() => setSelectedPoint(null)} />
 
       <div
         style={{
@@ -239,7 +238,8 @@ export default function MapView() {
           alignItems: "center",
           gap: 4,
           fontSize: 13,
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
           color: "#475569",
         }}
       >

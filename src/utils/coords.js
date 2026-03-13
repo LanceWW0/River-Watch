@@ -9,7 +9,10 @@ proj4.defs(
 );
 
 export function bngToLatLng(wkt) {
-  // Extract the two numbers from e.g. "POINT(514360 294016) <http://...>"
+  // Guard against undefined or null
+  if (!wkt || typeof wkt !== 'string') return null
+
+  // Step 1 - Extract the two numbers from e.g. "POINT(514360 294016) <http://...>"
   const match = wkt.match(/POINT\(([0-9.]+)\s+([0-9.]+)\)/);
   if (!match) return null;
 
@@ -17,14 +20,6 @@ export function bngToLatLng(wkt) {
   const easting = parseFloat(match[1]);
   const northing = parseFloat(match[2]);
 
-  try {
-    const [lng, lat] = proj4("EPSG:27700", "EPSG:4326", [easting, northing]);
-    console.log("Converted:", { easting, northing, lat, lng });
-    return [lat, lng];
-  } catch (e) {
-    console.error("proj4 conversion failed:", e);
-    return null;
-  }
 
   // Step 3 — convert from BNG to lat/long
   // proj4 returns [longitude, latitude] — Leaflet wants [latitude, longitude]
