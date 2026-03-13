@@ -258,7 +258,7 @@ function SkeletonChart({ delay = 0 }) {
 
 /* ── Chart component ───────────────────────────────────────── */
 
-function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain }) {
+function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hoveredTimestamp, onHoverTimestamp }) {
   const info = DETERMINAND_INFO[group.code];
   const displayName = info?.name || group.name;
   const description = info?.description || "";
@@ -383,6 +383,12 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain }) {
           <LineChart
             data={group.data}
             margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+            onMouseMove={(state) => {
+              if (state?.isTooltipActive && state?.activeLabel != null) {
+                onHoverTimestamp(state.activeLabel);
+              }
+            }}
+            onMouseLeave={() => onHoverTimestamp(null)}
           >
             <XAxis
               dataKey="timestamp"
@@ -401,6 +407,14 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain }) {
               tickLine={false}
               width={50}
             />
+            <ReferenceLine
+              x={hoveredTimestamp}
+              stroke="#94a3b8"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              style={{ opacity: hoveredTimestamp ? 1 : 0 }}
+              ifOverflow="hidden"
+            />
             {thresholds.map((t, i) => (
               <ReferenceLine
                 key={i}
@@ -411,6 +425,8 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain }) {
               />
             ))}
             <Tooltip
+              position={{ x: undefined, y: undefined }}
+              offset={-80}
               contentStyle={{
                 fontSize: 12,
                 background: "#1e293b",
@@ -419,6 +435,8 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain }) {
                 color: "#f1f5f9",
                 padding: "6px 10px",
               }}
+              wrapperStyle={{ pointerEvents: "none" }}
+              allowEscapeViewBox={{ x: true, y: false }}
               labelFormatter={(ts) =>
                 new Date(ts).toLocaleDateString("en-GB", {
                   day: "numeric",
@@ -460,6 +478,7 @@ export default function SidePanel({ point, onClose }) {
   const [observations, setObservations] = useState({});
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ loaded: 0, total: 0 });
+  const [hoveredTimestamp, setHoveredTimestamp] = useState(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -720,6 +739,8 @@ export default function SidePanel({ point, onClose }) {
             animDelay={i * 60}
             isStreaming={loading}
             timeDomain={timeDomain}
+            hoveredTimestamp={hoveredTimestamp}
+            onHoverTimestamp={setHoveredTimestamp}
           />
         ))}
 
