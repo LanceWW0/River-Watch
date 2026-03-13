@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -131,6 +131,160 @@ function sortGroups(groups) {
   });
 }
 
+/* ── Plain-English summary generator ───────────────────────── */
+
+function generateSummary(observations) {
+  const groups = Object.values(observations);
+  if (groups.length === 0) return null;
+
+  // ── Basic stats ──
+  let totalReadings = 0;
+  let earliestTs = Infinity;
+  for (const g of groups) {
+    totalReadings += g.data.length;
+    for (const d of g.data) {
+      if (d.timestamp < earliestTs) earliestTs = d.timestamp;
+    }
+  }
+  const numIndicators = groups.length;
+  const earliestYear = new Date(earliestTs).getFullYear();
+
+  const sentences = [];
+  sentences.push(
+    `This site has been monitored since ${earliestYear} with ${totalReadings.toLocaleString()} measurements across ${numIndicators} indicator${numIndicators !== 1 ? "s" : ""}.`
+  );
+
+  // ── Trend detection for key determinands with thresholds ──
+  const trendCodes = DETERMINAND_PRIORITY.filter(
+    (code) =>
+      observations[code] &&
+      DETERMINAND_INFO[code]?.thresholds?.length > 0 &&
+      observations[code].data.length >= 4
+  );
+
+  const trends = [];
+  for (const code of trendCodes) {
+    const info = DETERMINAND_INFO[code];
+    const data = observations[code].data;
+    const firstYear = new Date(data[0].timestamp).getFullYear();
+    const lastYear = new Date(data[data.length - 1].timestamp).getFullYear();
+    if (firstYear === lastYear) continue;
+
+    const avgForYear = (year) => {
+      const vals = data.filter(
+        (d) => new Date(d.timestamp).getFullYear() === year
+      );
+      if (vals.length === 0) return null;
+      return vals.reduce((s, v) => s + v.value, 0) / vals.length;
+    };
+
+    const firstAvg = avgForYear(firstYear);
+    const lastAvg = avgForYear(lastYear);
+    if (firstAvg === null || lastAvg === null) continue;
+
+    const isHigherBetter = !!info.goodAbove;
+    const ratio = firstAvg !== 0 ? (lastAvg - firstAvg) / Math.abs(firstAvg) : 0;
+
+    let direction;
+    if (isHigherBetter) {
+      direction = ratio > 0.2 ? "improved" : ratio < -0.2 ? "worsened" : "remained stable";
+    } else {
+      direction = ratio < -0.2 ? "improved" : ratio > 0.2 ? "worsened" : "remained stable";
+    }
+
+    // Spike detection: max in last 2 years vs "Poor" threshold
+    const twoYearsAgo = lastYear - 2;
+    const recentData = data.filter(
+      (d) => new Date(d.timestamp).getFullYear() >= twoYearsAgo
+    );
+    const recentMax = Math.max(...recentData.map((d) => d.value));
+    const poorThreshold = [...info.thresholds].sort((a, b) => b.value - a.value)[0]?.value;
+    const hasSpikes =
+      !isHigherBetter &&
+      poorThreshold != null &&
+      recentMax > poorThreshold &&
+      direction !== "worsened";
+
+    trends.push({
+      code,
+      name: info.name,
+      direction,
+      hasSpikes,
+      magnitude: Math.abs(ratio),
+    });
+  }
+
+  // Pick up to 2 most notable trends (prefer non-stable, then by magnitude)
+  trends.sort((a, b) => {
+    const aStable = a.direction === "remained stable" ? 1 : 0;
+    const bStable = b.direction === "remained stable" ? 1 : 0;
+    if (aStable !== bStable) return aStable - bStable;
+    return b.magnitude - a.magnitude;
+  });
+
+  const notable = trends.slice(0, 2);
+  for (const t of notable) {
+    let s = `${t.name} levels have generally ${t.direction} over time`;
+    if (t.hasSpikes) s += " but show occasional spikes";
+    s += ".";
+    sentences.push(s);
+  }
+
+  // ── Current state characterisation ──
+  const statuses = [];
+  for (const code of trendCodes) {
+    const info = DETERMINAND_INFO[code];
+    const data = observations[code].data;
+    if (data.length === 0) continue; 
+    const latest = data[data.length - 1].value;
+
+    let status;
+    if (info.goodAbove) {
+      status =
+        latest >= info.thresholds[0].value
+          ? "good"
+          : latest >= info.thresholds[1].value
+            ? "moderate"
+            : "poor";
+    } else {
+      const sorted = [...info.thresholds].sort((a, b) => a.value - b.value);
+      status = "good";
+      for (const t of sorted) {
+        if (latest > t.value) {
+          status =
+            t.color === "#22c55e" || t.color === "#84cc16"
+              ? "moderate"
+              : t.color === "#eab308"
+                ? "poor"
+                : "bad";
+        }
+      }
+    }
+    statuses.push({ code, name: info.name, status });
+  }
+
+  if (statuses.length > 0) {
+    const good = statuses.filter((s) => s.status === "good").length;
+    const poor = statuses.filter(
+      (s) => s.status === "poor" || s.status === "bad"
+    );
+    const total = statuses.length;
+
+    let qualityPhrase;
+    if (good === total) {
+      qualityPhrase = "Latest readings suggest good water quality.";
+    } else if (poor.length > 0) {
+      const concernNames = poor.map((p) => p.name).join(" and ");
+      qualityPhrase = `Latest readings suggest mixed water quality, with ${concernNames} levels of concern.`;
+    } else {
+      qualityPhrase = "Latest readings suggest moderate water quality.";
+    }
+    sentences.push(qualityPhrase);
+  }
+
+  return sentences.join(" ");
+}
+
 /* ── Shared time axis helpers ──────────────────────────────── */
 
 function computeSharedTimeDomain(groups) {
@@ -252,6 +406,55 @@ function SkeletonChart({ delay = 0 }) {
       </div>
       <SkeletonBlock width="100%" height={140} style={{ borderRadius: 8 }} />
       <SkeletonBlock width={120} height={10} style={{ marginTop: 6 }} />
+    </div>
+  );
+}
+
+/* ── Summary block ─────────────────────────────────────────── */
+
+function SummaryBlock({ summary, loading }) {
+  if (!summary && !loading) return null;
+
+  if (!summary && loading) {
+    return (
+      <div
+        style={{
+          marginBottom: 20,
+          padding: 14,
+          borderRadius: 8,
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          animation: "fadeInUp 0.3s ease both",
+        }}
+      >
+        <SkeletonBlock width="90%" height={12} />
+        <SkeletonBlock width="100%" height={12} style={{ marginTop: 6 }} />
+        <SkeletonBlock width="70%" height={12} style={{ marginTop: 6 }} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        marginBottom: 20,
+        padding: 14,
+        borderRadius: 8,
+        background: "#f0f9ff",
+        border: "1px solid #bae6fd",
+        animation: "fadeInUp 0.35s ease both",
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          lineHeight: 1.55,
+          color: "#334155",
+        }}
+      >
+        {summary}
+      </p>
     </div>
   );
 }
@@ -536,6 +739,11 @@ export default function SidePanel({ point, onClose }) {
     return () => controller.abort();
   }, [point]);
 
+  const summary = useMemo(
+    () => (loading ? null : generateSummary(observations)),
+    [observations, loading]
+  );
+
   if (!point) return null;
 
   const isOpen = point.samplingPointStatus?.notation !== "C";
@@ -731,6 +939,9 @@ export default function SidePanel({ point, onClose }) {
           padding: "16px 20px",
         }}
       >
+        {/* Plain-English summary */}
+        <SummaryBlock summary={summary} loading={loading} />
+
         {/* Real charts — appear progressively as data streams in */}
         {sortedGroups.map((group, i) => (
           <DeterminandChart
