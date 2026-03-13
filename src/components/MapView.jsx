@@ -38,8 +38,8 @@ function MapEvents({ onBoundsChange }) {
 
 export default function MapView() {
   const [points, setPoints] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState("Initialising map…");
   const [selectedPoint, setSelectedPoint] = useState(null);
   const abortRef = useRef(null);
 
@@ -47,6 +47,7 @@ export default function MapView() {
     const zoom = map.getZoom();
 
     if (zoom < 8) {
+      setLoading(false);
       setProgress("Zoom in to see sampling points");
       return;
     }
@@ -78,6 +79,8 @@ export default function MapView() {
       if (!firstRes.ok) {
         const text = await firstRes.text();
         console.error("API error:", firstRes.status, text);
+        setLoading(false);
+        setProgress("");
         return;
       }
 
@@ -155,26 +158,65 @@ export default function MapView() {
         overflow: "hidden",
       }}
     >
-      {progress && (
+      {(loading || progress) && (
         <div
           style={{
             position: "absolute",
-            top: 16,
+            top: "calc(4rem + 12px)",
             left: "50%",
             transform: "translateX(-50%)",
-            zIndex: 1000,
+            zIndex: 1100,
             background: "white",
-            padding: "8px 16px",
-            borderRadius: 8,
-            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+            padding: "10px 20px",
+            borderRadius: 12,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)",
             fontSize: 14,
-            minWidth: 60,
+            minWidth: 80,
             textAlign: "center",
             fontFamily:
               '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            color: "#334155",
           }}
         >
-          {progress.endsWith("%") ? `Loading… ${progress}` : progress}
+          {loading && (
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              style={{ flexShrink: 0 }}
+            >
+              <circle
+                cx="10"
+                cy="10"
+                r="8"
+                fill="none"
+                stroke="#e2e8f0"
+                strokeWidth="2.5"
+              />
+              <circle
+                cx="10"
+                cy="10"
+                r="8"
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeDasharray="32 18"
+                style={{
+                  animation: "geolumen-spin 0.8s linear infinite",
+                  transformOrigin: "center",
+                }}
+              />
+            </svg>
+          )}
+          <span>
+            {progress.endsWith("%")
+              ? `Loading sampling points… ${progress}`
+              : progress || "Loading…"}
+          </span>
         </div>
       )}
 

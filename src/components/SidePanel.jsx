@@ -481,7 +481,7 @@ export default function SidePanel({ point, onClose }) {
 
         while (skip < total) {
           const res = await fetch(
-            `/api/ea/water-quality/sampling-point/${point.notation}/observation?skip=${skip}&limit=250`,
+            `/api/observation?notation=${point.notation}&skip=${skip}&limit=250`,
             {
               headers: {
                 accept: "application/ld+json",
@@ -637,7 +637,36 @@ export default function SidePanel({ point, onClose }) {
                 marginBottom: 4,
               }}
             >
-              <span style={{ fontSize: 11, color: "#64748b" }}>
+              <span style={{ fontSize: 11, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 20 20"
+                  style={{ flexShrink: 0 }}
+                >
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="#e2e8f0"
+                    strokeWidth="2.5"
+                  />
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="#3b82f6"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeDasharray="32 18"
+                    style={{
+                      animation: "geolumen-spin 0.8s linear infinite",
+                      transformOrigin: "center",
+                    }}
+                  />
+                </svg>
                 Loading observations…
               </span>
               <span
