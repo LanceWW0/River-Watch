@@ -1,0 +1,16 @@
+{
+  "name": "ea-water-quality-pipeline",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Pre-processing pipeline for EA Water Quality data",
+  "scripts": {
+    "fetch:points": "node fetch-points.js",
+    "fetch:observations": "node fetch-observations.js",
+    "fetch:observations:active": "node fetch-observations.js --filter active",
+    "fetch:observations:sample": "node fetch-observations.js --limit 50",
+    "fetch:all": "npm run fetch:points && npm run fetch:observations"
+  },
+  "dependencies": {
+    "proj4": "^2.12.1"
+  }
+}
