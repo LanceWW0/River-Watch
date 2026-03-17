@@ -18,55 +18,37 @@ import { convertBNG, fetchAllPages, createProgress } from "./utils.js";
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
-const EA_BASE =
-  "https://environment.data.gov.uk/water-quality/sampling-point";
+const EA_BASE = "https://environment.data.gov.uk/water-quality/sampling-point";
 const OUTPUT_DIR = "data";
 const OUTPUT_FILE = `${OUTPUT_DIR}/points.geojson`;
 
 // ── Extract fields from raw API item ─────────────────────────────────────────
 
 function extractPoint(item) {
-  const notation = item?.notation ?? item?.["@id"]?.split("/").pop();
+  const notation = item?.notation;
   if (!notation) return null;
 
-  const label = item?.label ?? item?.comment ?? notation;
+  const label = item?.prefLabel ?? item?.altLabel ?? notation;
 
-  // Status: active, closed, etc.
-  const statusRaw = item?.status;
   const status =
-    typeof statusRaw === "object"
-      ? statusRaw?.label ?? statusRaw?.["@id"]?.split("/").pop() ?? "unknown"
-      : statusRaw ?? "unknown";
+    item?.samplingPointStatus?.prefLabel ??
+    item?.samplingPointStatus?.notation ??
+    "unknown";
 
-  // Type: river, lake, coastal, groundwater, etc.
-  const typeRaw = item?.samplingPointType;
-  const type =
-    typeof typeRaw === "object"
-      ? typeRaw?.label ?? typeRaw?.["@id"]?.split("/").pop() ?? "unknown"
-      : typeRaw ?? "unknown";
+  const type = item?.samplingPointType?.prefLabel ?? "unknown";
 
-  // Area / region
-  const areaRaw = item?.area;
-  const area =
-    typeof areaRaw === "object"
-      ? areaRaw?.label ?? areaRaw?.notation ?? null
-      : areaRaw ?? null;
+  const area = item?.area?.prefLabel ?? item?.region?.prefLabel ?? null;
 
-  // Coordinates — BNG easting/northing
-  const easting = item?.easting;
-  const northing = item?.northing;
-  const coords = convertBNG(easting, northing);
+  // Coordinates are in the WKT geometry string
+  const wkt = item?.geometry?.asWKT;
+  let finalCoords = null;
 
-  // Also check if lat/long already provided
-  const lat = item?.lat ?? item?.latitude;
-  const lng = item?.long ?? item?.longitude;
-
-  let finalCoords = coords;
-  if (!finalCoords && lat != null && lng != null) {
-    const la = Number(lat);
-    const ln = Number(lng);
-    if (!isNaN(la) && !isNaN(ln)) {
-      finalCoords = [Math.round(ln * 1e6) / 1e6, Math.round(la * 1e6) / 1e6];
+  if (wkt) {
+    const match = wkt.match(/POINT\(([0-9.]+)\s+([0-9.]+)\)/);
+    if (match) {
+      const easting = parseFloat(match[1]);
+      const northing = parseFloat(match[2]);
+      finalCoords = convertBNG(easting, northing);
     }
   }
 
@@ -163,7 +145,7 @@ async function main() {
   console.log(`   ⚠️  ${skippedNoCoords} skipped (no coordinates)`);
   console.log(`   🔁 ${skippedDuplicate} skipped (duplicates)`);
   console.log(
-    `\n💡 Tip: gzip this file for serving — should compress to ~2-3MB\n`
+    `\n💡 Tip: gzip this file for serving — should compress to ~2-3MB\n`,
   );
 }
 

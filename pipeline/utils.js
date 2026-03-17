@@ -14,7 +14,7 @@ proj4.defs(
   "EPSG:27700",
   "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 " +
     "+x_0=400000 +y_0=-100000 +ellps=airy " +
-    "+towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs"
+    "+towgs84=446.448,-125.157,542.06,0.15,0.247,0.842,-20.489 +units=m +no_defs",
 );
 
 const bngToWgs84 = proj4("EPSG:27700", "EPSG:4326");
@@ -48,16 +48,23 @@ const DEFAULT_BASE_DELAY_MS = 1000;
  */
 export async function fetchWithRetry(
   url,
-  { maxRetries = DEFAULT_MAX_RETRIES, baseDelay = DEFAULT_BASE_DELAY_MS } = {}
+  { maxRetries = DEFAULT_MAX_RETRIES, baseDelay = DEFAULT_BASE_DELAY_MS } = {},
 ) {
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          accept: "application/ld+json",
+          "API-Version": "1",
+        },
+      });
 
       if (res.status === 429) {
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
-        console.warn(`  ⏳ Rate limited (429), retrying in ${Math.round(delay)}ms...`);
+        console.warn(
+          `  ⏳ Rate limited (429), retrying in ${Math.round(delay)}ms...`,
+        );
         await sleep(delay);
         continue;
       }
@@ -65,7 +72,7 @@ export async function fetchWithRetry(
       if (res.status >= 500) {
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
         console.warn(
-          `  ⚠️  Server error (${res.status}), retrying in ${Math.round(delay)}ms...`
+          `  ⚠️  Server error (${res.status}), retrying in ${Math.round(delay)}ms...`,
         );
         await sleep(delay);
         continue;
@@ -82,7 +89,7 @@ export async function fetchWithRetry(
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
         if (attempt < maxRetries) {
           console.warn(
-            `  🔄 Network error, retrying in ${Math.round(delay)}ms: ${err.message}`
+            `  🔄 Network error, retrying in ${Math.round(delay)}ms: ${err.message}`,
           );
           await sleep(delay);
           continue;
@@ -105,7 +112,7 @@ export async function fetchWithRetry(
  */
 export async function fetchAllPages(
   baseUrl,
-  { limit = 250, onPage, delayBetweenPages = 150 } = {}
+  { limit = 250, onPage, delayBetweenPages = 150 } = {},
 ) {
   let skip = 0;
   let pageIndex = 0;
@@ -115,8 +122,14 @@ export async function fetchAllPages(
   while (true) {
     const url = `${baseUrl}${separator}skip=${skip}&limit=${limit}`;
     const data = await fetchWithRetry(url);
+    console.log("Response keys:", Object.keys(data));
+    console.log(
+      "First member:",
+      JSON.stringify(data.member?.[0])?.slice(0, 200),
+    );
+    console.log("totalItems:", data.totalItems);
 
-    const items = data?.items ?? data?.result?.items ?? [];
+    const items = data?.member ?? data?.items ?? data?.result?.items ?? [];
     if (items.length === 0) break;
 
     if (onPage) await onPage(items, pageIndex);
@@ -146,7 +159,7 @@ export function createProgress(label, total = null) {
       const totalStr = total ? ` / ${total}` : "";
       const pctStr = total ? ` (${((current / total) * 100).toFixed(1)}%)` : "";
       process.stdout.write(
-        `\r  ${label}: ${current}${totalStr}${pctStr} — ${elapsed}s elapsed`
+        `\r  ${label}: ${current}${totalStr}${pctStr} — ${elapsed}s elapsed`,
       );
     },
     done(message) {
@@ -176,8 +189,9 @@ export async function asyncPool(tasks, concurrency = 6) {
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () =>
-    worker()
+  const workers = Array.from(
+    { length: Math.min(concurrency, tasks.length) },
+    () => worker(),
   );
   await Promise.all(workers);
   return results;

@@ -7,7 +7,7 @@
     "fetch:points": "node fetch-points.js",
     "fetch:observations": "node fetch-observations.js",
     "fetch:observations:active": "node fetch-observations.js --filter active",
-    "fetch:observations:sample": "node fetch-observations.js --limit 50",
+    "fetch:observations:sample": "node fetch-observations.js --limit 5",
     "fetch:all": "npm run fetch:points && npm run fetch:observations"
   },
   "dependencies": {

@@ -749,10 +749,6 @@ export default function SidePanel({ point, onClose }) {
   const isOpen = point.samplingPointStatus?.notation !== "C";
   const sortedGroups = sortGroups(observations);
   const timeDomain = computeSharedTimeDomain(observations);
-  const pct =
-    progress.total > 0
-      ? Math.round((progress.loaded / progress.total) * 100)
-      : 0;
   const hasCharts = sortedGroups.length > 0;
 
   return (
@@ -919,7 +915,7 @@ export default function SidePanel({ point, onClose }) {
             >
               <div
                 style={{
-                  width: `${pct}%`,
+                  width: `${progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0}%`,
                   height: "100%",
                   background: "linear-gradient(90deg, #3b82f6, #60a5fa)",
                   borderRadius: 2,

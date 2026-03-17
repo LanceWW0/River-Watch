@@ -10,7 +10,7 @@
  *
  * Features:
  * - Resumable: skips points that already have output files (use --force to override)
- * - Controlled concurrency: processes N points in parallel (default 4)
+ * - Controlled concurrency: processes N points in parallel (default 5)
  * - Graceful rate limiting with exponential backoff
  * - Progress logging with ETA
  *
@@ -20,9 +20,11 @@
  *   node fetch-observations.js --concurrency 2    # fewer parallel requests
  *   node fetch-observations.js --limit 100        # only process first 100 points
  *   node fetch-observations.js --filter "active"  # only active points
+ *   node fetch-observations.js --open-only        # skip CLOSED points
  */
 
 import { mkdir, writeFile, readFile, access } from "node:fs/promises";
+import { execSync } from "node:child_process";
 import { fetchAllPages, sleep } from "./utils.js";
 
 // ── Config ───────────────────────────────────────────────────────────────────
@@ -39,50 +41,39 @@ function getArg(name, defaultVal) {
   return args[idx + 1] ?? defaultVal;
 }
 const FORCE = args.includes("--force");
-const CONCURRENCY = parseInt(getArg("concurrency", "4"), 10);
-const LIMIT = getArg("limit", null) ? parseInt(getArg("limit", null), 10) : null;
+const OPEN_ONLY = args.includes("--open-only");
+const CONCURRENCY = parseInt(getArg("concurrency", "5"), 10);
+const LIMIT = getArg("limit", null)
+  ? parseInt(getArg("limit", null), 10)
+  : null;
 const STATUS_FILTER = getArg("filter", null);
+const PROGRESS_INTERVAL = 100; // Log summary every N points
 
 // ── Extract observation fields ───────────────────────────────────────────────
 
 function extractObservation(item) {
   // Determinand
-  const detRaw = item?.determinand;
-  const determinand =
-    typeof detRaw === "object"
-      ? detRaw?.notation ?? detRaw?.label ?? detRaw?.["@id"]?.split("/").pop()
-      : detRaw;
+  const detRaw = item?.observedProperty;
+  const determinand = detRaw?.notation;
   if (!determinand) return null;
-
-  const detLabel =
-    typeof detRaw === "object" ? detRaw?.label ?? determinand : determinand;
+  const detLabel = detRaw?.prefLabel ?? detRaw?.altLabel ?? determinand;
 
   // Unit
-  const unitRaw = item?.determinand?.unit;
-  const unit =
-    typeof unitRaw === "object"
-      ? unitRaw?.label ?? unitRaw?.["@id"]?.split("/").pop() ?? ""
-      : unitRaw ?? "";
+  const unitRaw = item?.hasResult?.hasUnit;
+  const unit = unitRaw?.altLabel ?? unitRaw?.prefLabel ?? item?.hasUnit ?? "";
 
-  // Value — prefer numericValue, fall back to result (which may include upperBound)
-  let value = null;
-  const resultRaw = item?.result;
-  if (typeof resultRaw === "object") {
-    value = resultRaw?.numericValue ?? resultRaw?.value ?? null;
-    if (value == null && resultRaw?.upperBound != null) {
-      value = resultRaw.upperBound;
-    }
-  } else if (resultRaw != null) {
-    value = resultRaw;
+  // Value — prefer numericValue, fall back to upperBound (for "<X" readings)
+  let value = item?.hasResult?.numericValue ?? null;
+  if (value == null) {
+    value = item?.hasResult?.upperBound ?? null;
   }
-
   if (value != null) {
     value = Number(value);
     if (isNaN(value)) value = null;
   }
 
   // Date
-  const date = item?.sample?.dateTime ?? item?.sample?.date ?? item?.dateTime ?? null;
+  const date = item?.phenomenonTime ?? null;
   if (!date) return null;
 
   return {
@@ -115,7 +106,7 @@ async function processPoint(notation) {
   try {
     await fetchAllPages(url, {
       limit: 250,
-      delayBetweenPages: 100,
+      delayBetweenPages: 50,
       onPage(items) {
         for (const item of items) {
           const obs = extractObservation(item);
@@ -124,7 +115,9 @@ async function processPoint(notation) {
       },
     });
   } catch (err) {
-    console.warn(`\n  ❌ Failed to fetch observations for ${notation}: ${err.message}`);
+    console.warn(
+      `\n  ❌ Failed to fetch observations for ${notation}: ${err.message}`,
+    );
     return { notation, status: "error", observations: 0, error: err.message };
   }
 
@@ -133,25 +126,26 @@ async function processPoint(notation) {
   }
 
   // Group by determinand
+  // Group by determinand
   const grouped = {};
   for (const obs of allObs) {
     if (!grouped[obs.det]) {
       grouped[obs.det] = {
-        determinand: obs.det,
-        label: obs.detLabel,
+        code: obs.det,
+        name: obs.detLabel,
         unit: obs.unit,
-        readings: [],
+        data: [],
       };
     }
-    grouped[obs.det].readings.push({
-      d: obs.d,
-      v: obs.v,
+    grouped[obs.det].data.push({
+      timestamp: new Date(obs.d).getTime(),
+      value: obs.v,
     });
   }
 
-  // Sort each determinand's readings by date
+  // Sort each determinand's data by timestamp
   for (const det of Object.values(grouped)) {
-    det.readings.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+    det.data.sort((a, b) => a.timestamp - b.timestamp);
   }
 
   const output = {
@@ -164,6 +158,25 @@ async function processPoint(notation) {
   await writeFile(outputFile, JSON.stringify(output), "utf-8");
 
   return { notation, status: "ok", observations: allObs.length };
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDuration(seconds) {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  return `${hrs}h ${mins}m`;
+}
+
+function getDiskUsage(dir) {
+  try {
+    const output = execSync(`du -sh "${dir}" 2>/dev/null`, { encoding: "utf-8" });
+    return output.split("\t")[0].trim();
+  } catch {
+    return "unknown";
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -190,15 +203,20 @@ async function main() {
     status: f.properties.s,
   }));
 
-  // Apply filters
+  // Apply --open-only filter (skip CLOSED points)
+  if (OPEN_ONLY) {
+    const before = points.length;
+    points = points.filter((p) => p.status !== "CLOSED");
+    console.log(`   --open-only: ${points.length} of ${before} points (skipped ${before - points.length} CLOSED)`);
+  }
+
+  // Apply status filter
   if (STATUS_FILTER) {
     const before = points.length;
     points = points.filter((p) =>
-      p.status.toLowerCase().includes(STATUS_FILTER.toLowerCase())
+      p.status.toLowerCase().includes(STATUS_FILTER.toLowerCase()),
     );
-    console.log(
-      `   Filtered by status "${STATUS_FILTER}": ${points.length} of ${before}`
-    );
+    console.log(`   Filtered by status "${STATUS_FILTER}": ${points.length} of ${before}`);
   }
 
   if (LIMIT) {
@@ -210,27 +228,31 @@ async function main() {
 
   await mkdir(OUTPUT_DIR, { recursive: true });
 
-  console.log(
-    `📡 Fetching observations (concurrency: ${CONCURRENCY}, force: ${FORCE})...\n`
-  );
+  console.log(`📡 Fetching observations (concurrency: ${CONCURRENCY}, force: ${FORCE})...\n`);
 
   const stats = { ok: 0, skipped: 0, empty: 0, error: 0, totalObs: 0 };
   const startTime = Date.now();
   let processed = 0;
+  let lastProgressLog = 0;
 
   const total = points.length;
 
-  async function worker(workerPoints) {
-    for (const point of workerPoints) {
-      const result = await processPoint(point.notation);
+  // Process points in batches of CONCURRENCY
+  for (let i = 0; i < points.length; i += CONCURRENCY) {
+    const batch = points.slice(i, i + CONCURRENCY);
+    
+    // Process batch in parallel
+    const results = await Promise.all(batch.map((p) => processPoint(p.notation)));
 
+    // Update stats
+    for (const result of results) {
       stats[result.status] = (stats[result.status] || 0) + 1;
       stats.totalObs += result.observations;
       processed++;
 
       const elapsed = (Date.now() - startTime) / 1000;
       const rate = processed / elapsed;
-      const remaining = ((total - processed) / rate).toFixed(0);
+      const remaining = (total - processed) / rate;
       const pct = ((processed / total) * 100).toFixed(1);
 
       const statusIcon =
@@ -245,29 +267,44 @@ async function main() {
       process.stdout.write(
         `\r  ${statusIcon} ${processed}/${total} (${pct}%) | ` +
           `${result.notation} → ${result.observations} obs | ` +
-          `ETA: ${remaining}s | ` +
-          `ok:${stats.ok} skip:${stats.skipped} empty:${stats.empty} err:${stats.error}`
+          `ETA: ${formatDuration(remaining)} | ` +
+          `ok:${stats.ok} skip:${stats.skipped} empty:${stats.empty} err:${stats.error}   `,
       );
+    }
 
+    // Print progress summary every PROGRESS_INTERVAL points
+    if (processed >= lastProgressLog + PROGRESS_INTERVAL) {
+      lastProgressLog = Math.floor(processed / PROGRESS_INTERVAL) * PROGRESS_INTERVAL;
+      const elapsed = (Date.now() - startTime) / 1000;
+      const rate = processed / elapsed;
+      const remaining = (total - processed) / rate;
+      
+      console.log(`\n\n  ─── Progress Summary (${processed}/${total}) ───`);
+      console.log(`  ⏱️  Elapsed: ${formatDuration(elapsed)} | ETA: ${formatDuration(remaining)} | Rate: ${rate.toFixed(1)} pts/s`);
+      console.log(`  ✅ OK: ${stats.ok} | 📭 Empty: ${stats.empty} | ⏭️  Skipped: ${stats.skipped} | ❌ Errors: ${stats.error}`);
+      console.log(`  📈 Observations so far: ${stats.totalObs.toLocaleString()}\n`);
+    }
+
+    // Small delay between batches to avoid overwhelming the API
+    if (i + CONCURRENCY < points.length) {
       await sleep(50);
     }
   }
 
-  // Split points across workers
-  const chunks = Array.from({ length: CONCURRENCY }, () => []);
-  points.forEach((p, i) => chunks[i % CONCURRENCY].push(p));
+  const totalTime = (Date.now() - startTime) / 1000;
+  const diskUsage = getDiskUsage(OUTPUT_DIR);
 
-  await Promise.all(chunks.map((chunk) => worker(chunk)));
-
-  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-
-  console.log(`\n\n✅ Done in ${totalTime}s!`);
-  console.log(`   📊 ${stats.ok} points with data`);
-  console.log(`   📭 ${stats.empty} points with no observations`);
-  console.log(`   ⏭️  ${stats.skipped} skipped (already existed)`);
-  console.log(`   ❌ ${stats.error} errors`);
-  console.log(`   📈 ${stats.totalObs.toLocaleString()} total observations written`);
-  console.log(`   📁 Output: ${OUTPUT_DIR}/\n`);
+  console.log(`\n\n═══════════════════════════════════════════════════════`);
+  console.log(`  Final Summary`);
+  console.log(`═══════════════════════════════════════════════════════\n`);
+  console.log(`  ⏱️  Total time: ${formatDuration(totalTime)}`);
+  console.log(`  📊 Points with data: ${stats.ok}`);
+  console.log(`  📭 Points with no observations: ${stats.empty}`);
+  console.log(`  ⏭️  Skipped (already existed): ${stats.skipped}`);
+  console.log(`  ❌ Errors: ${stats.error}`);
+  console.log(`  📈 Total observations written: ${stats.totalObs.toLocaleString()}`);
+  console.log(`  📁 Output: ${OUTPUT_DIR}/`);
+  console.log(`  💾 Disk usage: ${diskUsage}\n`);
 }
 
 main().catch((err) => {
