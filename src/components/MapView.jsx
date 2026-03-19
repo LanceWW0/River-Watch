@@ -8,6 +8,7 @@ import MarkerClusterGroup from "react-leaflet-markercluster";
 import "leaflet/dist/leaflet.css";
 import "react-leaflet-markercluster/styles";
 import SidePanel from "./SidePanel";
+import RiverLayer from "./RiverLayer";
 import avatarImg from "../assets/me_snow.jpeg";
 
 export default function MapView() {
@@ -140,6 +141,7 @@ export default function MapView() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
+        <RiverLayer />
         <MarkerClusterGroup
           chunkedLoading
           maxClusterRadius={60}
