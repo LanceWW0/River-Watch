@@ -801,7 +801,7 @@ export default function SidePanel({ point, onClose }) {
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
               {point.samplingPointType?.prefLabel}
             </p>
-            <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+            <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
               <span
                 style={{
                   display: "inline-block",
