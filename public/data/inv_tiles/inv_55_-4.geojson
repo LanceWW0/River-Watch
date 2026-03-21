@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-3.045816,55.001168]},"properties":{"siteId":"64629","name":"SARK","catchment":"SARK","area":"NORTH WEST - NORTH","totalSamples":11,"firstSample":"18/04/1995","lastSample":"17/10/2005","latestBmwp":125,"indicesAvailable":8}}]}
