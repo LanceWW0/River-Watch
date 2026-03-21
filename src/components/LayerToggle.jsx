@@ -6,24 +6,28 @@ const LAYERS = [
     key: "rivers",
     label: "Rivers",
     color: "#0ea5e9",
+    emoji: "🌊",
     description: "River network overlay",
   },
   {
     key: "waterQuality",
     label: "Water Quality",
     color: "#3b82f6",
+    emoji: "💧",
     description: "EA sampling points",
   },
   {
     key: "fish",
     label: "Fish Surveys",
     color: "#16a34a",
+    emoji: "🐟",
     description: "Fish population sites",
   },
   {
     key: "invertebrates",
     label: "Invertebrates",
     color: "#d97706",
+    emoji: "🦐",
     description: "River health monitoring",
   },
 ];
@@ -129,6 +133,17 @@ export default function LayerToggle({ layers, onToggle, counts = {} }) {
                     </svg>
                   )}
                 </div>
+
+                {/* Emoji indicator */}
+                <span
+                  style={{
+                    fontSize: 16,
+                    opacity: isActive ? 1 : 0.4,
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  {layer.emoji}
+                </span>
 
                 <input
                   type="checkbox"

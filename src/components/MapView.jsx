@@ -2,15 +2,140 @@ import { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
-  CircleMarker,
+  Marker,
 } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
+import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "react-leaflet-markercluster/styles";
 import SidePanel from "./SidePanel";
 import RiverLayer from "./RiverLayer";
 import LayerToggle from "./LayerToggle";
 import avatarImg from "../assets/me_snow.jpeg";
+
+// Layer configuration with emojis and colors
+const LAYER_STYLES = {
+  waterQuality: {
+    emoji: "💧",
+    color: "#3b82f6",
+    bgColor: "rgba(59, 130, 246, 0.15)",
+    borderColor: "#2563eb",
+  },
+  fish: {
+    emoji: "🐟",
+    color: "#16a34a",
+    bgColor: "rgba(22, 163, 74, 0.15)",
+    borderColor: "#15803d",
+  },
+  invertebrates: {
+    emoji: "🦐",
+    color: "#d97706",
+    bgColor: "rgba(217, 119, 6, 0.15)",
+    borderColor: "#b45309",
+  },
+};
+
+// Create custom icon for individual markers
+function createEmojiIcon(emoji, isSelected = false, healthColor = null) {
+  const size = isSelected ? 36 : 28;
+  const fontSize = isSelected ? 20 : 16;
+  
+  // Health indicator dot for invertebrates
+  const healthDot = healthColor
+    ? `<div style="
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: ${healthColor};
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      "></div>`
+    : "";
+
+  return L.divIcon({
+    className: "emoji-marker",
+    html: `
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: ${fontSize}px;
+        background: white;
+        border-radius: 50%;
+        box-shadow: ${isSelected ? "0 0 0 3px rgba(59, 130, 246, 0.4)," : ""} 0 2px 8px rgba(0,0,0,0.2);
+        cursor: pointer;
+        position: relative;
+        transition: transform 0.15s;
+      ">
+        ${emoji}
+        ${healthDot}
+      </div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+// Create custom cluster icon
+function createClusterIcon(cluster, emoji, color, bgColor) {
+  const count = cluster.getChildCount();
+  const size = count < 10 ? 44 : count < 100 ? 52 : 60;
+  const fontSize = count < 10 ? 20 : count < 100 ? 18 : 16;
+  
+  return L.divIcon({
+    className: "emoji-cluster",
+    html: `
+      <div style="
+        width: ${size}px;
+        height: ${size}px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      ">
+        <div style="
+          position: absolute;
+          inset: 0;
+          background: ${bgColor};
+          border: 2px solid ${color};
+          border-radius: 50%;
+          opacity: 0.9;
+        "></div>
+        <span style="
+          position: relative;
+          font-size: ${fontSize}px;
+          z-index: 1;
+        ">${emoji}</span>
+        <div style="
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          min-width: 20px;
+          height: 20px;
+          padding: 0 5px;
+          background: ${color};
+          color: white;
+          font-size: 11px;
+          font-weight: 700;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          z-index: 2;
+        ">${count.toLocaleString()}</div>
+      </div>
+    `,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
 
 export default function MapView() {
   const [points, setPoints] = useState([]);
@@ -201,34 +326,38 @@ export default function MapView() {
         />
         {layerVisibility.rivers && <RiverLayer />}
 
-        {/* Water Quality Layer - Blue markers */}
+        {/* Water Quality Layer - 💧 markers */}
         {layerVisibility.waterQuality && (
           <MarkerClusterGroup
             chunkedLoading
             maxClusterRadius={60}
             spiderfyOnMaxZoom
             showCoverageOnHover={false}
+            iconCreateFunction={(cluster) =>
+              createClusterIcon(
+                cluster,
+                LAYER_STYLES.waterQuality.emoji,
+                LAYER_STYLES.waterQuality.color,
+                LAYER_STYLES.waterQuality.bgColor
+              )
+            }
           >
             {points.map((point, i) => {
               const coords = point.coords;
               if (!coords) return null;
 
-              const isOpen = point.samplingPointStatus?.notation !== "C";
               const isSelected =
                 selectedItem?.type === "water-quality" &&
                 selectedItem?.data?.notation === point.notation;
 
               return (
-                <CircleMarker
+                <Marker
                   key={`wq-${point.notation || i}`}
-                  center={coords}
-                  radius={isSelected ? 9 : 6}
-                  color={isSelected ? "#1d4ed8" : isOpen ? "#2563eb" : "#9ca3af"}
-                  fillColor={
-                    isSelected ? "#2563eb" : isOpen ? "#3b82f6" : "#d1d5db"
-                  }
-                  fillOpacity={isSelected ? 1 : 0.7}
-                  weight={isSelected ? 3 : 1}
+                  position={coords}
+                  icon={createEmojiIcon(
+                    LAYER_STYLES.waterQuality.emoji,
+                    isSelected
+                  )}
                   eventHandlers={{
                     click: () =>
                       setSelectedItem({ type: "water-quality", data: point }),
@@ -239,13 +368,21 @@ export default function MapView() {
           </MarkerClusterGroup>
         )}
 
-        {/* Fish Survey Layer - Green markers */}
+        {/* Fish Survey Layer - 🐟 markers */}
         {layerVisibility.fish && (
           <MarkerClusterGroup
             chunkedLoading
             maxClusterRadius={60}
             spiderfyOnMaxZoom
             showCoverageOnHover={false}
+            iconCreateFunction={(cluster) =>
+              createClusterIcon(
+                cluster,
+                LAYER_STYLES.fish.emoji,
+                LAYER_STYLES.fish.color,
+                LAYER_STYLES.fish.bgColor
+              )
+            }
           >
             {fishSites.map((site, i) => {
               const coords = site.coords;
@@ -256,14 +393,10 @@ export default function MapView() {
                 selectedItem?.data?.siteId === site.siteId;
 
               return (
-                <CircleMarker
+                <Marker
                   key={`fish-${site.siteId || i}`}
-                  center={coords}
-                  radius={isSelected ? 9 : 6}
-                  color={isSelected ? "#15803d" : "#16a34a"}
-                  fillColor={isSelected ? "#16a34a" : "#22c55e"}
-                  fillOpacity={isSelected ? 1 : 0.7}
-                  weight={isSelected ? 3 : 1}
+                  position={coords}
+                  icon={createEmojiIcon(LAYER_STYLES.fish.emoji, isSelected)}
                   eventHandlers={{
                     click: () => setSelectedItem({ type: "fish", data: site }),
                   }}
@@ -273,13 +406,21 @@ export default function MapView() {
           </MarkerClusterGroup>
         )}
 
-        {/* Invertebrate Layer - Orange markers */}
+        {/* Invertebrate Layer - 🦐 markers with BMWP health indicator */}
         {layerVisibility.invertebrates && (
           <MarkerClusterGroup
             chunkedLoading
             maxClusterRadius={60}
             spiderfyOnMaxZoom
             showCoverageOnHover={false}
+            iconCreateFunction={(cluster) =>
+              createClusterIcon(
+                cluster,
+                LAYER_STYLES.invertebrates.emoji,
+                LAYER_STYLES.invertebrates.color,
+                LAYER_STYLES.invertebrates.bgColor
+              )
+            }
           >
             {invSites.map((site, i) => {
               const coords = site.coords;
@@ -289,31 +430,27 @@ export default function MapView() {
                 selectedItem?.type === "invertebrates" &&
                 selectedItem?.data?.siteId === site.siteId;
 
-              // Color-code by BMWP score if available
-              let markerColor = "#d97706";
-              let fillColor = "#f59e0b";
+              // BMWP health indicator color
+              let healthColor = null;
               if (site.latestBmwp != null) {
                 if (site.latestBmwp >= 100) {
-                  markerColor = "#16a34a";
-                  fillColor = "#22c55e";
+                  healthColor = "#22c55e"; // Green - good
                 } else if (site.latestBmwp >= 50) {
-                  markerColor = "#d97706";
-                  fillColor = "#f59e0b";
+                  healthColor = "#eab308"; // Yellow - moderate
                 } else {
-                  markerColor = "#dc2626";
-                  fillColor = "#ef4444";
+                  healthColor = "#ef4444"; // Red - poor
                 }
               }
 
               return (
-                <CircleMarker
+                <Marker
                   key={`inv-${site.siteId || i}`}
-                  center={coords}
-                  radius={isSelected ? 9 : 6}
-                  color={isSelected ? "#b45309" : markerColor}
-                  fillColor={isSelected ? "#d97706" : fillColor}
-                  fillOpacity={isSelected ? 1 : 0.7}
-                  weight={isSelected ? 3 : 1}
+                  position={coords}
+                  icon={createEmojiIcon(
+                    LAYER_STYLES.invertebrates.emoji,
+                    isSelected,
+                    healthColor
+                  )}
                   eventHandlers={{
                     click: () =>
                       setSelectedItem({ type: "invertebrates", data: site }),
