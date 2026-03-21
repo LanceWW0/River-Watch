@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -11,6 +11,7 @@ import "react-leaflet-markercluster/styles";
 import SidePanel from "./SidePanel";
 import RiverLayer from "./RiverLayer";
 import LayerToggle from "./LayerToggle";
+import usePointTiles from "../hooks/usePointTiles";
 import avatarImg from "../assets/me_snow.jpeg";
 
 // Layer configuration with emojis and colors
@@ -39,7 +40,7 @@ const LAYER_STYLES = {
 function createEmojiIcon(emoji, isSelected = false, healthColor = null) {
   const size = isSelected ? 36 : 28;
   const fontSize = isSelected ? 20 : 16;
-  
+
   // Health indicator dot for invertebrates
   const healthDot = healthColor
     ? `<div style="
@@ -86,7 +87,7 @@ function createClusterIcon(cluster, emoji, color, bgColor) {
   const count = cluster.getChildCount();
   const size = count < 10 ? 44 : count < 100 ? 52 : 60;
   const fontSize = count < 10 ? 20 : count < 100 ? 18 : 16;
-  
+
   return L.divIcon({
     className: "emoji-cluster",
     html: `
@@ -137,12 +138,229 @@ function createClusterIcon(cluster, emoji, color, bgColor) {
   });
 }
 
+// Transform functions for each dataset
+const transformWaterQuality = (feature) => {
+  const props = feature.properties;
+  const [lng, lat] = feature.geometry.coordinates;
+  return {
+    notation: props.n,
+    prefLabel: props.l,
+    coords: [lat, lng],
+    samplingPointStatus: { notation: props.s === "OPEN" ? "A" : "C" },
+    samplingPointType: { prefLabel: props.t },
+    region: { prefLabel: props.a },
+  };
+};
+
+const transformFish = (feature) => {
+  const props = feature.properties;
+  const [lng, lat] = feature.geometry.coordinates;
+  return {
+    siteId: props.siteId,
+    name: props.name,
+    waterbody: props.waterbody,
+    region: props.region,
+    area: props.area,
+    totalSurveys: props.totalSurveys,
+    speciesCount: props.speciesCount,
+    firstSurvey: props.firstSurvey,
+    lastSurvey: props.lastSurvey,
+    coords: [lat, lng],
+  };
+};
+
+const transformInvertebrates = (feature) => {
+  const props = feature.properties;
+  const [lng, lat] = feature.geometry.coordinates;
+  return {
+    siteId: props.siteId,
+    name: props.name,
+    catchment: props.catchment,
+    area: props.area,
+    totalSamples: props.totalSamples,
+    firstSample: props.firstSample,
+    lastSample: props.lastSample,
+    latestBmwp: props.latestBmwp,
+    indicesAvailable: props.indicesAvailable,
+    coords: [lat, lng],
+  };
+};
+
+/**
+ * Inner component that lives inside MapContainer and has access to useMap/useMapEvents.
+ * Loads point tiles based on viewport and renders MarkerClusterGroups.
+ */
+function MapContents({ layerVisibility, selectedItem, setSelectedItem, onCountsChange }) {
+  const { points, totalCount: wqTotal } = usePointTiles({
+    tileDir: "point_tiles",
+    filePrefix: "points",
+    enabled: layerVisibility.waterQuality,
+    transformFeature: transformWaterQuality,
+  });
+
+  const { points: fishSites, totalCount: fishTotal } = usePointTiles({
+    tileDir: "fish_tiles",
+    filePrefix: "fish",
+    enabled: layerVisibility.fish,
+    transformFeature: transformFish,
+  });
+
+  const { points: invSites, totalCount: invTotal } = usePointTiles({
+    tileDir: "inv_tiles",
+    filePrefix: "inv",
+    enabled: layerVisibility.invertebrates,
+    transformFeature: transformInvertebrates,
+  });
+
+  // Pass total counts up to parent for LayerToggle
+  useEffect(() => {
+    onCountsChange({ waterQuality: wqTotal, fish: fishTotal, invertebrates: invTotal });
+  }, [wqTotal, fishTotal, invTotal, onCountsChange]);
+
+  return (
+    <>
+      {layerVisibility.rivers && <RiverLayer />}
+
+      {/* Water Quality Layer */}
+      {layerVisibility.waterQuality && (
+        <MarkerClusterGroup
+          chunkedLoading
+          maxClusterRadius={60}
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+          iconCreateFunction={(cluster) =>
+            createClusterIcon(
+              cluster,
+              LAYER_STYLES.waterQuality.emoji,
+              LAYER_STYLES.waterQuality.color,
+              LAYER_STYLES.waterQuality.bgColor
+            )
+          }
+        >
+          {points.map((point, i) => {
+            const coords = point.coords;
+            if (!coords) return null;
+
+            const isSelected =
+              selectedItem?.type === "water-quality" &&
+              selectedItem?.data?.notation === point.notation;
+
+            return (
+              <Marker
+                key={`wq-${point.notation || i}`}
+                position={coords}
+                icon={createEmojiIcon(
+                  LAYER_STYLES.waterQuality.emoji,
+                  isSelected
+                )}
+                eventHandlers={{
+                  click: () =>
+                    setSelectedItem({ type: "water-quality", data: point }),
+                }}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
+      )}
+
+      {/* Fish Survey Layer */}
+      {layerVisibility.fish && (
+        <MarkerClusterGroup
+          chunkedLoading
+          maxClusterRadius={60}
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+          iconCreateFunction={(cluster) =>
+            createClusterIcon(
+              cluster,
+              LAYER_STYLES.fish.emoji,
+              LAYER_STYLES.fish.color,
+              LAYER_STYLES.fish.bgColor
+            )
+          }
+        >
+          {fishSites.map((site, i) => {
+            const coords = site.coords;
+            if (!coords) return null;
+
+            const isSelected =
+              selectedItem?.type === "fish" &&
+              selectedItem?.data?.siteId === site.siteId;
+
+            return (
+              <Marker
+                key={`fish-${site.siteId || i}`}
+                position={coords}
+                icon={createEmojiIcon(LAYER_STYLES.fish.emoji, isSelected)}
+                eventHandlers={{
+                  click: () => setSelectedItem({ type: "fish", data: site }),
+                }}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
+      )}
+
+      {/* Invertebrate Layer with BMWP health indicator */}
+      {layerVisibility.invertebrates && (
+        <MarkerClusterGroup
+          chunkedLoading
+          maxClusterRadius={60}
+          spiderfyOnMaxZoom
+          showCoverageOnHover={false}
+          iconCreateFunction={(cluster) =>
+            createClusterIcon(
+              cluster,
+              LAYER_STYLES.invertebrates.emoji,
+              LAYER_STYLES.invertebrates.color,
+              LAYER_STYLES.invertebrates.bgColor
+            )
+          }
+        >
+          {invSites.map((site, i) => {
+            const coords = site.coords;
+            if (!coords) return null;
+
+            const isSelected =
+              selectedItem?.type === "invertebrates" &&
+              selectedItem?.data?.siteId === site.siteId;
+
+            // BMWP health indicator color
+            let healthColor = null;
+            if (site.latestBmwp != null) {
+              if (site.latestBmwp >= 100) {
+                healthColor = "#22c55e"; // Green - good
+              } else if (site.latestBmwp >= 50) {
+                healthColor = "#eab308"; // Yellow - moderate
+              } else {
+                healthColor = "#ef4444"; // Red - poor
+              }
+            }
+
+            return (
+              <Marker
+                key={`inv-${site.siteId || i}`}
+                position={coords}
+                icon={createEmojiIcon(
+                  LAYER_STYLES.invertebrates.emoji,
+                  isSelected,
+                  healthColor
+                )}
+                eventHandlers={{
+                  click: () =>
+                    setSelectedItem({ type: "invertebrates", data: site }),
+                }}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
+      )}
+
+    </>
+  );
+}
+
 export default function MapView() {
-  const [points, setPoints] = useState([]);
-  const [fishSites, setFishSites] = useState([]);
-  const [invSites, setInvSites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [progress, setProgress] = useState("Loading sampling points…");
   const [selectedItem, setSelectedItem] = useState(null);
   const [layerVisibility, setLayerVisibility] = useState({
     rivers: false,
@@ -150,90 +368,11 @@ export default function MapView() {
     fish: true,
     invertebrates: true,
   });
-
-  useEffect(() => {
-    async function loadAllData() {
-      try {
-        // Load all three GeoJSON files in parallel
-        const [pointsRes, fishRes, invRes] = await Promise.all([
-          fetch("/data/points.geojson"),
-          fetch("/data/fish_sites.geojson"),
-          fetch("/data/inv_sites.geojson"),
-        ]);
-
-        // Process water quality points
-        if (pointsRes.ok) {
-          const geojson = await pointsRes.json();
-          const transformed = geojson.features.map((feature) => {
-            const props = feature.properties;
-            const [lng, lat] = feature.geometry.coordinates;
-            return {
-              notation: props.n,
-              prefLabel: props.l,
-              coords: [lat, lng],
-              samplingPointStatus: { notation: props.s === "OPEN" ? "A" : "C" },
-              samplingPointType: { prefLabel: props.t },
-              region: { prefLabel: props.a },
-            };
-          });
-          setPoints(transformed);
-        }
-
-        // Process fish survey sites
-        if (fishRes.ok) {
-          const geojson = await fishRes.json();
-          const transformed = geojson.features.map((feature) => {
-            const props = feature.properties;
-            const [lng, lat] = feature.geometry.coordinates;
-            return {
-              siteId: props.siteId,
-              name: props.name,
-              waterbody: props.waterbody,
-              region: props.region,
-              area: props.area,
-              totalSurveys: props.totalSurveys,
-              speciesCount: props.speciesCount,
-              firstSurvey: props.firstSurvey,
-              lastSurvey: props.lastSurvey,
-              coords: [lat, lng],
-            };
-          });
-          setFishSites(transformed);
-        }
-
-        // Process invertebrate sites
-        if (invRes.ok) {
-          const geojson = await invRes.json();
-          const transformed = geojson.features.map((feature) => {
-            const props = feature.properties;
-            const [lng, lat] = feature.geometry.coordinates;
-            return {
-              siteId: props.siteId,
-              name: props.name,
-              catchment: props.catchment,
-              area: props.area,
-              totalSamples: props.totalSamples,
-              firstSample: props.firstSample,
-              lastSample: props.lastSample,
-              latestBmwp: props.latestBmwp,
-              indicesAvailable: props.indicesAvailable,
-              coords: [lat, lng],
-            };
-          });
-          setInvSites(transformed);
-        }
-
-        setLoading(false);
-        setProgress("");
-      } catch (err) {
-        console.error("Error loading data:", err);
-        setProgress("Failed to load data");
-        setLoading(false);
-      }
-    }
-
-    loadAllData();
-  }, []);
+  const [layerCounts, setLayerCounts] = useState({
+    waterQuality: 0,
+    fish: 0,
+    invertebrates: 0,
+  });
 
   const handleLayerToggle = (layerKey) => {
     setLayerVisibility((prev) => ({
@@ -253,68 +392,6 @@ export default function MapView() {
         overflow: "hidden",
       }}
     >
-      {(loading || progress) && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(4rem + 12px)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1100,
-            background: "white",
-            padding: "10px 20px",
-            borderRadius: 12,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08)",
-            fontSize: 14,
-            minWidth: 80,
-            textAlign: "center",
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            color: "#334155",
-          }}
-        >
-          {loading && (
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              style={{ flexShrink: 0 }}
-            >
-              <circle
-                cx="10"
-                cy="10"
-                r="8"
-                fill="none"
-                stroke="#e2e8f0"
-                strokeWidth="2.5"
-              />
-              <circle
-                cx="10"
-                cy="10"
-                r="8"
-                fill="none"
-                stroke="#2563eb"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeDasharray="32 18"
-                style={{
-                  animation: "geolumen-spin 0.8s linear infinite",
-                  transformOrigin: "center",
-                }}
-              />
-            </svg>
-          )}
-          <span>
-            {progress.endsWith("%")
-              ? `Loading sampling points… ${progress}`
-              : progress || "Loading…"}
-          </span>
-        </div>
-      )}
-
       <MapContainer
         center={[54.97, -1.61]}
         zoom={10}
@@ -324,153 +401,19 @@ export default function MapView() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
         />
-        {layerVisibility.rivers && <RiverLayer />}
-
-        {/* Water Quality Layer - 💧 markers */}
-        {layerVisibility.waterQuality && (
-          <MarkerClusterGroup
-            chunkedLoading
-            maxClusterRadius={60}
-            spiderfyOnMaxZoom
-            showCoverageOnHover={false}
-            iconCreateFunction={(cluster) =>
-              createClusterIcon(
-                cluster,
-                LAYER_STYLES.waterQuality.emoji,
-                LAYER_STYLES.waterQuality.color,
-                LAYER_STYLES.waterQuality.bgColor
-              )
-            }
-          >
-            {points.map((point, i) => {
-              const coords = point.coords;
-              if (!coords) return null;
-
-              const isSelected =
-                selectedItem?.type === "water-quality" &&
-                selectedItem?.data?.notation === point.notation;
-
-              return (
-                <Marker
-                  key={`wq-${point.notation || i}`}
-                  position={coords}
-                  icon={createEmojiIcon(
-                    LAYER_STYLES.waterQuality.emoji,
-                    isSelected
-                  )}
-                  eventHandlers={{
-                    click: () =>
-                      setSelectedItem({ type: "water-quality", data: point }),
-                  }}
-                />
-              );
-            })}
-          </MarkerClusterGroup>
-        )}
-
-        {/* Fish Survey Layer - 🐟 markers */}
-        {layerVisibility.fish && (
-          <MarkerClusterGroup
-            chunkedLoading
-            maxClusterRadius={60}
-            spiderfyOnMaxZoom
-            showCoverageOnHover={false}
-            iconCreateFunction={(cluster) =>
-              createClusterIcon(
-                cluster,
-                LAYER_STYLES.fish.emoji,
-                LAYER_STYLES.fish.color,
-                LAYER_STYLES.fish.bgColor
-              )
-            }
-          >
-            {fishSites.map((site, i) => {
-              const coords = site.coords;
-              if (!coords) return null;
-
-              const isSelected =
-                selectedItem?.type === "fish" &&
-                selectedItem?.data?.siteId === site.siteId;
-
-              return (
-                <Marker
-                  key={`fish-${site.siteId || i}`}
-                  position={coords}
-                  icon={createEmojiIcon(LAYER_STYLES.fish.emoji, isSelected)}
-                  eventHandlers={{
-                    click: () => setSelectedItem({ type: "fish", data: site }),
-                  }}
-                />
-              );
-            })}
-          </MarkerClusterGroup>
-        )}
-
-        {/* Invertebrate Layer - 🦐 markers with BMWP health indicator */}
-        {layerVisibility.invertebrates && (
-          <MarkerClusterGroup
-            chunkedLoading
-            maxClusterRadius={60}
-            spiderfyOnMaxZoom
-            showCoverageOnHover={false}
-            iconCreateFunction={(cluster) =>
-              createClusterIcon(
-                cluster,
-                LAYER_STYLES.invertebrates.emoji,
-                LAYER_STYLES.invertebrates.color,
-                LAYER_STYLES.invertebrates.bgColor
-              )
-            }
-          >
-            {invSites.map((site, i) => {
-              const coords = site.coords;
-              if (!coords) return null;
-
-              const isSelected =
-                selectedItem?.type === "invertebrates" &&
-                selectedItem?.data?.siteId === site.siteId;
-
-              // BMWP health indicator color
-              let healthColor = null;
-              if (site.latestBmwp != null) {
-                if (site.latestBmwp >= 100) {
-                  healthColor = "#22c55e"; // Green - good
-                } else if (site.latestBmwp >= 50) {
-                  healthColor = "#eab308"; // Yellow - moderate
-                } else {
-                  healthColor = "#ef4444"; // Red - poor
-                }
-              }
-
-              return (
-                <Marker
-                  key={`inv-${site.siteId || i}`}
-                  position={coords}
-                  icon={createEmojiIcon(
-                    LAYER_STYLES.invertebrates.emoji,
-                    isSelected,
-                    healthColor
-                  )}
-                  eventHandlers={{
-                    click: () =>
-                      setSelectedItem({ type: "invertebrates", data: site }),
-                  }}
-                />
-              );
-            })}
-          </MarkerClusterGroup>
-        )}
+        <MapContents
+          layerVisibility={layerVisibility}
+          selectedItem={selectedItem}
+          setSelectedItem={setSelectedItem}
+          onCountsChange={setLayerCounts}
+        />
       </MapContainer>
 
       {/* Layer Toggle Control */}
       <LayerToggle
         layers={layerVisibility}
         onToggle={handleLayerToggle}
-        counts={{
-          waterQuality: points.length,
-          fish: fishSites.length,
-          invertebrates: invSites.length,
-        }}
+        counts={layerCounts}
       />
 
       <SidePanel
