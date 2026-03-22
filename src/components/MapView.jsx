@@ -3,6 +3,7 @@ import {
   MapContainer,
   TileLayer,
   Marker,
+  Tooltip,
   ZoomControl,
 } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
@@ -19,18 +20,21 @@ import avatarImg from "../assets/me_snow.jpeg";
 const LAYER_STYLES = {
   waterQuality: {
     emoji: "💧",
+    label: "Water Quality",
     color: "#3b82f6",
     bgColor: "rgba(59, 130, 246, 0.15)",
     borderColor: "#2563eb",
   },
   fish: {
     emoji: "🐟",
+    label: "Fish",
     color: "#16a34a",
     bgColor: "rgba(22, 163, 74, 0.15)",
     borderColor: "#15803d",
   },
   invertebrates: {
     emoji: "🦐",
+    label: "Invertebrates",
     color: "#d97706",
     bgColor: "rgba(217, 119, 6, 0.15)",
     borderColor: "#b45309",
@@ -137,6 +141,61 @@ function createClusterIcon(cluster, emoji, color, bgColor) {
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
+}
+
+// Tooltip content renderer
+function tooltipContent(name, layerKey, region) {
+  const style = LAYER_STYLES[layerKey];
+  return `
+    <div style="
+      background: white;
+      border-radius: 10px;
+      padding: 8px 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      font-family: 'DM Sans', system-ui, sans-serif;
+      min-width: 120px;
+      max-width: 240px;
+    ">
+      <div style="
+        font-size: 13px;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 6px;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      ">${name || "Unknown Site"}</div>
+      <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+        <span style="
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          font-weight: 500;
+          color: ${style.color};
+          background: ${style.bgColor};
+          border: 1px solid ${style.bgColor.replace("0.15", "0.35")};
+          padding: 2px 8px;
+          border-radius: 99px;
+          white-space: nowrap;
+        ">${style.emoji} ${style.label}</span>
+        ${region ? `<span style="
+          font-size: 11px;
+          font-weight: 500;
+          color: #64748b;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          padding: 2px 8px;
+          border-radius: 99px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 160px;
+        ">${region}</span>` : ""}
+      </div>
+    </div>
+  `;
 }
 
 // Transform functions for each dataset
@@ -258,7 +317,20 @@ function MapContents({ layerVisibility, selectedItem, setSelectedItem, onCountsC
                   click: () =>
                     setSelectedItem({ type: "water-quality", data: point }),
                 }}
-              />
+              >
+                <Tooltip
+                  direction="top"
+                  offset={[0, -16]}
+                  className="site-tooltip"
+                  permanent={false}
+                >
+                  <div dangerouslySetInnerHTML={{ __html: tooltipContent(
+                    point.prefLabel,
+                    "waterQuality",
+                    point.region?.prefLabel
+                  ) }} />
+                </Tooltip>
+              </Marker>
             );
           })}
         </MarkerClusterGroup>
@@ -296,7 +368,20 @@ function MapContents({ layerVisibility, selectedItem, setSelectedItem, onCountsC
                 eventHandlers={{
                   click: () => setSelectedItem({ type: "fish", data: site }),
                 }}
-              />
+              >
+                <Tooltip
+                  direction="top"
+                  offset={[0, -16]}
+                  className="site-tooltip"
+                  permanent={false}
+                >
+                  <div dangerouslySetInnerHTML={{ __html: tooltipContent(
+                    site.name,
+                    "fish",
+                    site.region
+                  ) }} />
+                </Tooltip>
+              </Marker>
             );
           })}
         </MarkerClusterGroup>
@@ -351,7 +436,20 @@ function MapContents({ layerVisibility, selectedItem, setSelectedItem, onCountsC
                   click: () =>
                     setSelectedItem({ type: "invertebrates", data: site }),
                 }}
-              />
+              >
+                <Tooltip
+                  direction="top"
+                  offset={[0, -16]}
+                  className="site-tooltip"
+                  permanent={false}
+                >
+                  <div dangerouslySetInnerHTML={{ __html: tooltipContent(
+                    site.name,
+                    "invertebrates",
+                    site.area
+                  ) }} />
+                </Tooltip>
+              </Marker>
             );
           })}
         </MarkerClusterGroup>
