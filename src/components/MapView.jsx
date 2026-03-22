@@ -3,6 +3,7 @@ import {
   MapContainer,
   TileLayer,
   Marker,
+  ZoomControl,
 } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-markercluster";
 import L from "leaflet";
@@ -395,8 +396,10 @@ export default function MapView() {
       <MapContainer
         center={[54.97, -1.61]}
         zoom={10}
+        zoomControl={false}
         style={{ height: "100%", width: "100%" }}
       >
+        <ZoomControl position="topright" />
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution="&copy; OpenStreetMap contributors"
