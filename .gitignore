@@ -23,6 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+.claude
 
 # Large pre-processed data files
 raw/
