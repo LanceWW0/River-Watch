@@ -9,6 +9,91 @@ import {
   ReferenceLine,
 } from "recharts";
 
+// Layer configuration for visual differentiation
+const LAYER_CONFIG = {
+  "water-quality": {
+    color: "#3b82f6",
+    borderColor: "#2563eb",
+    bgColor: "#eff6ff",
+    label: "Water Quality",
+    chartColor: "#3b82f6",
+  },
+  fish: {
+    color: "#16a34a",
+    borderColor: "#15803d",
+    bgColor: "#f0fdf4",
+    label: "Fish Survey",
+    chartColor: "#16a34a",
+  },
+  invertebrates: {
+    color: "#d97706",
+    borderColor: "#b45309",
+    bgColor: "#fffbeb",
+    label: "Invertebrates",
+    chartColor: "#d97706",
+  },
+};
+
+// Invertebrate index information with thresholds
+const INV_INDEX_INFO = {
+  BMWP_TOTAL: {
+    name: "BMWP Score",
+    description: "River health indicator. Above 100 is good, below 50 is poor.",
+    thresholds: [
+      { value: 100, label: "Good", color: "#22c55e" },
+      { value: 50, label: "Moderate", color: "#eab308" },
+    ],
+    goodAbove: 100,
+  },
+  BMWP_ASPT: {
+    name: "Avg Score Per Taxon",
+    description: "Average sensitivity of species. Above 6 suggests clean water.",
+    thresholds: [
+      { value: 6, label: "Good", color: "#22c55e" },
+      { value: 5, label: "Moderate", color: "#eab308" },
+    ],
+    goodAbove: 6,
+  },
+  BMWP_N_TAXA: {
+    name: "Number of Taxa",
+    description: "Number of invertebrate families found. More = healthier.",
+    thresholds: [],
+  },
+  WHPT_TOTAL: {
+    name: "WHPT Total Score",
+    description: "Modern replacement for BMWP. Higher = healthier.",
+    thresholds: [
+      { value: 100, label: "Good", color: "#22c55e" },
+      { value: 50, label: "Moderate", color: "#eab308" },
+    ],
+    goodAbove: 100,
+  },
+  WHPT_ASPT: {
+    name: "WHPT Avg Score Per Taxon",
+    description: "Higher = cleaner water.",
+    thresholds: [
+      { value: 6, label: "Good", color: "#22c55e" },
+      { value: 5, label: "Moderate", color: "#eab308" },
+    ],
+    goodAbove: 6,
+  },
+  LIFE_FAMILY_INDEX: {
+    name: "LIFE Index",
+    description: "Flow sensitivity. Detects drought and abstraction impacts.",
+    thresholds: [],
+  },
+  PSI_FAMILY_SCORE: {
+    name: "PSI Score",
+    description: "Sediment sensitivity. Lower = more siltation.",
+    thresholds: [],
+  },
+  DEHLI: {
+    name: "DEHLI",
+    description: "Headwater health index.",
+    thresholds: [],
+  },
+};
+
 // Key determinands the public would care about, with WFD-style thresholds 
 const DETERMINAND_INFO = {
   "0111": {
@@ -461,11 +546,26 @@ function SummaryBlock({ summary, loading }) {
 
 /* ── Chart component ───────────────────────────────────────── */
 
-function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hoveredTimestamp, onHoverTimestamp }) {
-  const info = DETERMINAND_INFO[group.code];
-  const displayName = info?.name || group.name;
-  const description = info?.description || "";
-  const thresholds = info?.thresholds || [];
+function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hoveredTimestamp, onHoverTimestamp, chartColor = "#3b82f6", dataType = "water-quality" }) {
+  // Get info based on data type
+  let info, displayName, description, thresholds;
+  
+  if (dataType === "invertebrates") {
+    info = INV_INDEX_INFO[group.code];
+    displayName = info?.name || group.name;
+    description = info?.description || group.description || "";
+    thresholds = info?.thresholds || [];
+  } else if (dataType === "fish") {
+    info = null;
+    displayName = group.name || group.code;
+    description = "Fish population count over time.";
+    thresholds = [];
+  } else {
+    info = DETERMINAND_INFO[group.code];
+    displayName = info?.name || group.name;
+    description = info?.description || "";
+    thresholds = info?.thresholds || [];
+  }
 
   const latestValue =
     group.data.length > 0 ? group.data[group.data.length - 1].value : null;
@@ -652,10 +752,10 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hover
             <Line
               type="monotone"
               dataKey="value"
-              stroke="#3b82f6"
+              stroke={chartColor}
               strokeWidth={1.5}
               dot={false}
-              activeDot={{ r: 3, fill: "#3b82f6" }}
+              activeDot={{ r: 3, fill: chartColor }}
               isAnimationActive={false}
             />
           </LineChart>
@@ -675,17 +775,92 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hover
   );
 }
 
+/* ── Fish/Invertebrate summary generators ─────────────────── */
+
+function generateFishSummary(data, siteInfo) {
+  if (!data || data.length === 0) return null;
+  
+  const speciesCount = data.length;
+  let totalSurveys = 0;
+  let earliestTs = Infinity;
+  let latestTs = -Infinity;
+  
+  for (const species of data) {
+    for (const d of species.data) {
+      if (d.timestamp < earliestTs) earliestTs = d.timestamp;
+      if (d.timestamp > latestTs) latestTs = d.timestamp;
+    }
+    totalSurveys = Math.max(totalSurveys, species.data.length);
+  }
+  
+  const earliestYear = new Date(earliestTs).getFullYear();
+  const latestYear = new Date(latestTs).getFullYear();
+  
+  // Find dominant species (highest total count)
+  let dominant = data[0];
+  let maxTotal = 0;
+  for (const species of data) {
+    const total = species.data.reduce((sum, d) => sum + d.value, 0);
+    if (total > maxTotal) {
+      maxTotal = total;
+      dominant = species;
+    }
+  }
+  
+  const sentences = [];
+  sentences.push(`This site has recorded ${speciesCount} fish species across ${totalSurveys} surveys from ${earliestYear} to ${latestYear}.`);
+  
+  if (dominant) {
+    const dominantName = dominant.code || dominant.name;
+    sentences.push(`${dominantName} is the most commonly recorded species.`);
+  }
+  
+  return sentences.join(" ");
+}
+
+function generateInvSummary(data, siteInfo) {
+  if (!data || data.length === 0) return null;
+  
+  const sentences = [];
+  const bmwp = data.find(d => d.code === "BMWP_TOTAL");
+  const aspt = data.find(d => d.code === "BMWP_ASPT" || d.code === "WHPT_ASPT");
+  
+  if (siteInfo?.totalSamples) {
+    sentences.push(`This site has been sampled ${siteInfo.totalSamples} times.`);
+  }
+  
+  if (bmwp && bmwp.data.length > 0) {
+    const latest = bmwp.data[bmwp.data.length - 1].value;
+    let quality = "poor";
+    if (latest >= 100) quality = "good";
+    else if (latest >= 50) quality = "moderate";
+    sentences.push(`The latest BMWP score of ${latest} indicates ${quality} river health.`);
+  }
+  
+  if (aspt && aspt.data.length > 0) {
+    const latest = aspt.data[aspt.data.length - 1].value.toFixed(2);
+    const cleanWater = parseFloat(latest) >= 6 ? "suggesting clean water" : "indicating some pollution pressure";
+    sentences.push(`Average Score Per Taxon is ${latest}, ${cleanWater}.`);
+  }
+  
+  return sentences.join(" ");
+}
+
 /* ── Side panel ────────────────────────────────────────────── */
 
-export default function SidePanel({ point, onClose }) {
+export default function SidePanel({ selectedItem, onClose }) {
   const [observations, setObservations] = useState({});
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ loaded: 0, total: 0 });
   const [hoveredTimestamp, setHoveredTimestamp] = useState(null);
   const abortRef = useRef(null);
 
+  const dataType = selectedItem?.type || "water-quality";
+  const itemData = selectedItem?.data;
+  const layerConfig = LAYER_CONFIG[dataType];
+
   useEffect(() => {
-    if (!point) return;
+    if (!selectedItem) return;
 
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
@@ -695,61 +870,158 @@ export default function SidePanel({ point, onClose }) {
     setProgress({ loaded: 0, total: 0 });
     setObservations({});
 
-    async function fetchObservations() {
+    async function fetchData() {
       try {
-        let allMembers = [];
-        let skip = 0;
-        let total = Infinity;
+        if (dataType === "water-quality") {
+          // Existing API-based fetch for water quality
+          const point = itemData;
+          let allMembers = [];
+          let skip = 0;
+          let total = Infinity;
 
-        while (skip < total) {
+          while (skip < total) {
+            const res = await fetch(
+              `/api/observation?notation=${point.notation}&skip=${skip}&limit=250`,
+              {
+                headers: {
+                  accept: "application/ld+json",
+                  "API-Version": "1",
+                },
+                signal: controller.signal,
+              }
+            );
+            const data = await res.json();
+            total = data.totalItems || 0;
+            const members = data.member || [];
+            allMembers = [...allMembers, ...members];
+            skip += 250;
+
+            setProgress({ loaded: allMembers.length, total });
+
+            const grouped = parseObservations(allMembers);
+            setObservations(grouped);
+
+            if (members.length < 250) break;
+          }
+        } else if (dataType === "fish") {
+          // Static JSON fetch for fish data
           const res = await fetch(
-            `/api/observation?notation=${point.notation}&skip=${skip}&limit=250`,
-            {
-              headers: {
-                accept: "application/ld+json",
-                "API-Version": "1",
-              },
-              signal: controller.signal,
-            }
+            `/data/fish_observations/${itemData.siteId}.json`,
+            { signal: controller.signal }
           );
-          const data = await res.json();
-          total = data.totalItems || 0;
-          const members = data.member || [];
-          allMembers = [...allMembers, ...members];
-          skip += 250;
-
-          setProgress({ loaded: allMembers.length, total });
-
-          // Update charts progressively after each batch
-          const grouped = parseObservations(allMembers);
-          setObservations(grouped);
-
-          if (members.length < 250) break;
+          if (res.ok) {
+            const data = await res.json();
+            // Transform to grouped format
+            const grouped = {};
+            for (const species of data.species || []) {
+              grouped[species.code] = {
+                code: species.code,
+                name: species.name,
+                unit: species.unit || "count",
+                data: species.data.map((d) => ({
+                  date: new Date(d.timestamp).toISOString(),
+                  timestamp: d.timestamp,
+                  value: d.value,
+                })),
+              };
+            }
+            setObservations(grouped);
+            setProgress({ loaded: Object.keys(grouped).length, total: Object.keys(grouped).length });
+          }
+        } else if (dataType === "invertebrates") {
+          // Static JSON fetch for invertebrate data
+          const res = await fetch(
+            `/data/inv_observations/${itemData.siteId}.json`,
+            { signal: controller.signal }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            // Transform to grouped format
+            const grouped = {};
+            for (const det of data.determinands || []) {
+              grouped[det.code] = {
+                code: det.code,
+                name: det.name,
+                unit: det.unit || "score",
+                description: det.description,
+                data: det.data.map((d) => ({
+                  date: new Date(d.timestamp).toISOString(),
+                  timestamp: d.timestamp,
+                  value: d.value,
+                })),
+              };
+            }
+            setObservations(grouped);
+            setProgress({ loaded: Object.keys(grouped).length, total: Object.keys(grouped).length });
+          }
         }
       } catch (err) {
         if (err.name !== "AbortError") {
-          console.error("Error fetching observations:", err);
+          console.error("Error fetching data:", err);
         }
       }
       setLoading(false);
     }
 
-    fetchObservations();
+    fetchData();
 
     return () => controller.abort();
-  }, [point]);
+  }, [selectedItem, dataType, itemData]);
 
-  const summary = useMemo(
-    () => (loading ? null : generateSummary(observations)),
-    [observations, loading]
-  );
+  const summary = useMemo(() => {
+    if (loading) return null;
+    if (dataType === "fish") {
+      return generateFishSummary(Object.values(observations), itemData);
+    } else if (dataType === "invertebrates") {
+      return generateInvSummary(Object.values(observations), itemData);
+    } else {
+      return generateSummary(observations);
+    }
+  }, [observations, loading, dataType, itemData]);
 
-  if (!point) return null;
+  if (!selectedItem) return null;
 
-  const isOpen = point.samplingPointStatus?.notation !== "C";
-  const sortedGroups = sortGroups(observations);
+  const sortedGroups = dataType === "water-quality" 
+    ? sortGroups(observations) 
+    : Object.values(observations).sort((a, b) => a.name.localeCompare(b.name));
   const timeDomain = computeSharedTimeDomain(observations);
   const hasCharts = sortedGroups.length > 0;
+  
+  // Get display info based on data type
+  let siteName, siteSubtitle, statusBadge, regionBadge;
+  if (dataType === "water-quality") {
+    const point = itemData;
+    const isOpen = point.samplingPointStatus?.notation !== "C";
+    siteName = point.prefLabel || point.altLabel;
+    siteSubtitle = point.samplingPointType?.prefLabel;
+    statusBadge = {
+      label: isOpen ? "Active" : "Closed",
+      bg: isOpen ? "#dcfce7" : "#f3f4f6",
+      color: isOpen ? "#166534" : "#6b7280",
+    };
+    regionBadge = point.region?.prefLabel;
+  } else if (dataType === "fish") {
+    siteName = itemData.name;
+    siteSubtitle = itemData.waterbody ? `Waterbody: ${itemData.waterbody}` : itemData.area;
+    statusBadge = {
+      label: `${itemData.speciesCount || "?"} species`,
+      bg: "#dcfce7",
+      color: "#166534",
+    };
+    regionBadge = itemData.region;
+  } else {
+    siteName = itemData.name;
+    siteSubtitle = itemData.catchment ? `Catchment: ${itemData.catchment}` : itemData.area;
+    const bmwp = itemData.latestBmwp;
+    let bmwpStatus = { label: "No BMWP", bg: "#f3f4f6", color: "#6b7280" };
+    if (bmwp != null) {
+      if (bmwp >= 100) bmwpStatus = { label: `BMWP ${bmwp}`, bg: "#dcfce7", color: "#166534" };
+      else if (bmwp >= 50) bmwpStatus = { label: `BMWP ${bmwp}`, bg: "#fef3c7", color: "#92400e" };
+      else bmwpStatus = { label: `BMWP ${bmwp}`, bg: "#fee2e2", color: "#991b1b" };
+    }
+    statusBadge = bmwpStatus;
+    regionBadge = itemData.area;
+  }
 
   return (
     <div
@@ -771,14 +1043,46 @@ export default function SidePanel({ point, onClose }) {
     >
       <style>{styleSheet}</style>
 
-      {/* Header */}
+      {/* Header with colored accent */}
       <div
         style={{
           padding: "16px 20px",
           borderBottom: "1px solid #e2e8f0",
+          borderLeft: `4px solid ${layerConfig.color}`,
+          background: layerConfig.bgColor,
           flexShrink: 0,
         }}
       >
+        {/* Layer type indicator */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            marginBottom: 8,
+          }}
+        >
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: layerConfig.color,
+            }}
+          />
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: layerConfig.borderColor,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+            }}
+          >
+            {layerConfig.label}
+          </span>
+        </div>
+
         <div
           style={{
             display: "flex",
@@ -796,12 +1100,14 @@ export default function SidePanel({ point, onClose }) {
                 lineHeight: 1.3,
               }}
             >
-              {point.prefLabel || point.altLabel}
+              {siteName}
             </h2>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-              {point.samplingPointType?.prefLabel}
-            </p>
-            <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
+            {siteSubtitle && (
+              <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
+                {siteSubtitle}
+              </p>
+            )}
+            <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
               <span
                 style={{
                   display: "inline-block",
@@ -809,27 +1115,29 @@ export default function SidePanel({ point, onClose }) {
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: 99,
-                  background: isOpen ? "#dcfce7" : "#f3f4f6",
-                  color: isOpen ? "#166534" : "#6b7280",
+                  background: statusBadge.bg,
+                  color: statusBadge.color,
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
                 }}
               >
-                {isOpen ? "Active" : "Closed"}
+                {statusBadge.label}
               </span>
-              <span
-                style={{
-                  display: "inline-block",
-                  fontSize: 10,
-                  fontWeight: 500,
-                  padding: "2px 8px",
-                  borderRadius: 99,
-                  background: "#f1f5f9",
-                  color: "#475569",
-                }}
-              >
-                {point.region?.prefLabel}
-              </span>
+              {regionBadge && (
+                <span
+                  style={{
+                    display: "inline-block",
+                    fontSize: 10,
+                    fontWeight: 500,
+                    padding: "2px 8px",
+                    borderRadius: 99,
+                    background: "#f1f5f9",
+                    color: "#475569",
+                  }}
+                >
+                  {regionBadge}
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -948,6 +1256,8 @@ export default function SidePanel({ point, onClose }) {
             timeDomain={timeDomain}
             hoveredTimestamp={hoveredTimestamp}
             onHoverTimestamp={setHoveredTimestamp}
+            chartColor={layerConfig.chartColor}
+            dataType={dataType}
           />
         ))}
 
