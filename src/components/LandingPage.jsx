@@ -83,59 +83,23 @@ const features = [
   },
 ];
 
-/* ── Wave background component ─────────────────────────────── */
+/* ── Video background component ────────────────────────────── */
 
-function WaveBackground() {
+function VideoBackground() {
   return (
-    <div className="absolute bottom-0 left-0 right-0 overflow-hidden pointer-events-none" style={{ height: "40%" }}>
-      <svg
-        className="absolute bottom-0 w-full"
-        style={{ minWidth: "1200px", height: "100%" }}
-        viewBox="0 0 1440 320"
-        preserveAspectRatio="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M0,224 C240,280 480,160 720,200 C960,240 1200,180 1440,220 L1440,320 L0,320Z"
-          fill="#134e4a"
-          fillOpacity="0.05"
-        >
-          <animateTransform
-            attributeName="transform"
-            type="translate"
-            values="0,0; -80,0; 0,0"
-            dur="12s"
-            repeatCount="indefinite"
-          />
-        </path>
-        <path
-          d="M0,256 C180,200 420,300 720,240 C1020,180 1260,260 1440,230 L1440,320 L0,320Z"
-          fill="#0d9488"
-          fillOpacity="0.07"
-        >
-          <animateTransform
-            attributeName="transform"
-            type="translate"
-            values="0,0; 60,0; 0,0"
-            dur="8s"
-            repeatCount="indefinite"
-          />
-        </path>
-        <path
-          d="M0,280 C360,240 600,300 900,260 C1100,236 1320,280 1440,260 L1440,320 L0,320Z"
-          fill="#134e4a"
-          fillOpacity="0.04"
-        >
-          <animateTransform
-            attributeName="transform"
-            type="translate"
-            values="0,0; -40,0; 0,0"
-            dur="16s"
-            repeatCount="indefinite"
-          />
-        </path>
-      </svg>
-    </div>
+    <>
+      <video
+        className="absolute inset-0 w-full h-full object-cover"
+        src="/rivers_loop.mp4"
+        poster="/thumbnail.png"
+        autoPlay
+        loop
+        muted
+        playsInline
+      />
+      {/* Dark overlay for text contrast */}
+      <div className="absolute inset-0 bg-black/50" />
+    </>
   );
 }
 
@@ -198,27 +162,27 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white">
       {/* ── Hero ─────────────────────────────────────────── */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 overflow-hidden">
-        <WaveBackground />
+        <VideoBackground />
 
         <div className="relative z-10 max-w-3xl mx-auto pt-16">
           <h1
-            className="text-4xl sm:text-5xl md:text-6xl font-bold text-slate-900 mb-6 leading-tight"
+            className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 leading-tight drop-shadow-lg"
             style={{ fontFamily: "'DM Serif Display', serif" }}
           >
             England's river health,
             <br />
-            <span className="text-teal-700">made visible.</span>
+            <span className="text-teal-300">made visible.</span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Explore decades of water quality data from every river, lake, and
+          <p className="text-lg sm:text-xl text-slate-200 max-w-2xl mx-auto mb-10 leading-relaxed drop-shadow">
+            Explore decades of water quality data from every river, lake and
             estuary in England — all in one place. No jargon, no paywalls, just
             the data that matters.
           </p>
 
           <Link
             to="/map"
-            className="inline-flex items-center gap-2 px-8 py-4 bg-teal-800 text-white text-base font-medium rounded-full no-underline transition-all duration-300 hover:bg-teal-700 hover:shadow-lg hover:shadow-teal-900/20 hover:-translate-y-0.5"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-teal-600 text-white text-base font-medium rounded-full no-underline transition-all duration-300 hover:bg-teal-500 hover:shadow-lg hover:shadow-teal-400/20 hover:-translate-y-0.5"
           >
             Explore the map
             <MapPin size={18} />
