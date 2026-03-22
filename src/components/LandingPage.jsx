@@ -307,7 +307,7 @@ export default function LandingPage() {
           <p className="text-lg text-slate-600 leading-relaxed mb-6">
             Water quality data in England is publicly available, but it's buried
             in sprawling spreadsheets and technical reports that most people will
-            never read. Geolumen exists to change that — to take this complex,
+            never read. River Watch exists to change that — to take this complex,
             fragmented data and make it something anyone can explore and
             understand.
           </p>
@@ -339,7 +339,7 @@ export default function LandingPage() {
             className="w-24 h-24 rounded-full object-cover mx-auto mb-6 shadow-md"
           />
           <p className="text-lg text-slate-600 leading-relaxed mb-6">
-            Geolumen is built by{" "}
+            River Watch is built by{" "}
             <a
               href="https://laurence-wayne.com/about"
               target="_blank"
@@ -420,7 +420,7 @@ export default function LandingPage() {
             via their open data API.
           </p>
           <p className="text-xs text-slate-300">
-            © {new Date().getFullYear()} Geolumen. Open-source and free to use.
+            © {new Date().getFullYear()} River Watch. Open-source and free to use.
           </p>
         </div>
       </footer>
