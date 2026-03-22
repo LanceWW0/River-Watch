@@ -1193,7 +1193,7 @@ export default function SidePanel({ selectedItem, onClose }) {
                     strokeLinecap="round"
                     strokeDasharray="32 18"
                     style={{
-                      animation: "geolumen-spin 0.8s linear infinite",
+                      animation: "riverwatch-spin 0.8s linear infinite",
                       transformOrigin: "center",
                     }}
                   />
