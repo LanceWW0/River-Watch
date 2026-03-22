@@ -32,3 +32,26 @@ body {
 @keyframes geolumen-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Marker hover animation */
+.emoji-marker > div {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.emoji-marker:hover > div {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25), 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Custom tooltip styling */
+.site-tooltip {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.site-tooltip .leaflet-tooltip-content {
+  margin: 0;
+}
+.site-tooltip::before {
+  display: none !important;
+}

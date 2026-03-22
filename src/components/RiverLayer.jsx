@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useMap, useMapEvents, GeoJSON } from "react-leaflet";
 import L from "leaflet";
+import { calculateVisibleTiles, DEBOUNCE_MS } from "../utils/tileGrid";
+
+const MAX_CONCURRENT_FETCHES = 4;
 
 const MIN_ZOOM = 10;
 const DETAIL_ZOOM = 12; // Use full detail tiles at this zoom and above
 const INTERACTIVE_ZOOM = 13;
-const DEBOUNCE_MS = 300;
-const MAX_CONCURRENT_FETCHES = 4;
 
 // Base style for rivers
 const BASE_STYLE = {
@@ -172,24 +173,6 @@ function RiverInfoPanel({ riverName, stats, onClose }) {
       </div>
     </div>
   );
-}
-
-/**
- * Calculate which 1°×1° grid tiles are visible in the current map bounds
- */
-function calculateVisibleTiles(bounds) {
-  const south = Math.floor(bounds.getSouth());
-  const north = Math.floor(bounds.getNorth());
-  const west = Math.floor(bounds.getWest());
-  const east = Math.floor(bounds.getEast());
-
-  const tiles = [];
-  for (let lat = south; lat <= north; lat++) {
-    for (let lng = west; lng <= east; lng++) {
-      tiles.push(`${lat}_${lng}`);
-    }
-  }
-  return tiles;
 }
 
 export default function RiverLayer() {
