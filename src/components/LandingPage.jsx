@@ -427,7 +427,7 @@ export default function LandingPage() {
             via their open data API.
           </p>
           <p className="text-xs text-slate-300">
-            © {new Date().getFullYear()} Geolumen. Open-source and free to use.
+            © {new Date().getFullYear()} River Watch. Open-source and free to use.
           </p>
         </div>
       </footer>
