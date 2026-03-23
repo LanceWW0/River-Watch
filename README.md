@@ -1,21 +1,21 @@
-# Geolumen 🌊
+# River Watch 🌊
 
 **England's river health, made visible.**
 
-Geolumen is an interactive web app that makes Environment Agency water quality 
-data accessible to everyone. Explore over 65,000 sampling points across every 
-river, lake, and estuary in England — with decades of measurements visualised 
+River Watch is an interactive web app that makes Environment Agency water quality
+data accessible to everyone. Explore over 65,000 sampling points across every
+river, lake, and estuary in England — with decades of measurements visualised
 as interactive time series charts.
 
 ---
 
 ## Features
 
-- 🗺️ **Interactive map** — Browse all sampling locations with clustered markers 
+- 🗺️ **Interactive map** — Browse all sampling locations with clustered markers
   powered by Leaflet
-- 📈 **Time series charts** — View historical measurements for ammonia, 
+- 📈 **Time series charts** — View historical measurements for ammonia,
   phosphates, dissolved oxygen, temperature, and more
-- ✅ **Water quality thresholds** — See how readings compare against official 
+- ✅ **Water quality thresholds** — See how readings compare against official
   EA standards at a glance
 - 📱 **Responsive design** — Works across desktop and mobile
 
@@ -39,7 +39,7 @@ npm install
 npm run dev
 ```
 
-The dev server proxies all API requests to the Environment Agency's open data 
+The dev server proxies all API requests to the Environment Agency's open data
 API — no keys or account required.
 
 ---
@@ -55,8 +55,8 @@ API — no keys or account required.
 
 ## Contributing
 
-Contributions, issues and feature requests are welcome. This project is in 
-active development — if you work in environmental monitoring, water quality, 
+Contributions, issues and feature requests are welcome. This project is in
+active development — if you work in environmental monitoring, water quality,
 or open data and have ideas, please get in touch.
 
 ---
@@ -69,6 +69,6 @@ or open data and have ideas, please get in touch.
 
 ## License
 
-Open-source and free to use under the [MIT License](LICENSE).  
-Water quality data provided by the [Environment Agency](https://environment.data.gov.uk/water-quality/view/landing) 
+Open-source and free to use under the [MIT License](LICENSE).
+Water quality data provided by the [Environment Agency](https://environment.data.gov.uk/water-quality/view/landing)
 under the Open Government Licence.
