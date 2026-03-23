@@ -179,8 +179,8 @@ export default function LandingPage() {
   const [featuresRef, featuresVisible] = useReveal(0.1);
   const [statsRef, statsVisible] = useReveal(0.2);
 
-  const samplingPoints = useCountUp(65000, 2200, statsVisible);
-  const measurements = useCountUp(58000000, 2600, statsVisible);
+  const samplingPoints = useCountUp(111000, 2200, statsVisible);
+  const measurements = useCountUp(60000000, 2600, statsVisible);
 
   return (
     <div className="min-h-screen bg-white">
