@@ -1,5 +1,6 @@
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/react";
+import Navbar from "../src/components/Navbar";
 import "../src/index.css";
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -43,6 +44,7 @@ export default function RootLayout({ children }) {
             </Script>
           </>
         )}
+        <Navbar />
         {children}
         <Analytics />
       </body>

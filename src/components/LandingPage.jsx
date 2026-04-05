@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { MapPin, LineChart, Droplets, TrendingUp } from "lucide-react";
 import avatarImg from "../assets/me_snow.jpeg";
 
@@ -205,7 +205,7 @@ export default function LandingPage() {
           </p>
 
           <Link
-            to="/map"
+            href="/map"
             className="inline-flex items-center gap-2 px-8 py-4 bg-teal-600 text-white text-base font-medium rounded-full no-underline transition-all duration-300 hover:bg-teal-500 hover:shadow-lg hover:shadow-teal-400/20 hover:-translate-y-0.5"
           >
             Explore the map
