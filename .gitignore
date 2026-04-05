@@ -1,5 +1,6 @@
 # Sensitive Files
 .env
+.venv
 
 # Logs
 logs
@@ -30,3 +31,4 @@ dist-ssr
 
 # Large pre-processed data files
 raw/
+sites.geojson
