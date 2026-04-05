@@ -12,6 +12,7 @@ import "leaflet/dist/leaflet.css";
 import "react-leaflet-markercluster/styles";
 import SidePanel from "./SidePanel";
 import RiverLayer from "./RiverLayer";
+import SSSILayer from "./SSSILayer";
 import LayerToggle from "./LayerToggle";
 import usePointTiles from "../hooks/usePointTiles";
 import avatarImg from "../assets/me_snow.jpeg";
@@ -279,6 +280,7 @@ function MapContents({ layerVisibility, selectedItem, setSelectedItem, onCountsC
 
   return (
     <>
+      {layerVisibility.sssi && <SSSILayer />}
       {layerVisibility.rivers && <RiverLayer />}
 
       {/* Water Quality Layer */}
@@ -463,6 +465,7 @@ export default function MapView() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [layerVisibility, setLayerVisibility] = useState({
     rivers: false,
+    sssi: false,
     waterQuality: true,
     fish: true,
     invertebrates: true,

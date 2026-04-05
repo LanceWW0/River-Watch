@@ -10,6 +10,13 @@ const LAYERS = [
     description: "River network overlay",
   },
   {
+    key: "sssi",
+    label: "SSSI Sites",
+    color: "#16a34a",
+    emoji: "🌿",
+    description: "Protected nature areas",
+  },
+  {
     key: "waterQuality",
     label: "Water Quality",
     color: "#3b82f6",
