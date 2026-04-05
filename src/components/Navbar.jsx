@@ -27,7 +27,7 @@ export default function Navbar() {
             className="flex items-center gap-2 text-xl tracking-tight no-underline"
             style={{ fontFamily: "'DM Serif Display', serif", color: "#134e4a" }}
           >
-            <img src={logoImg} alt="River Watch logo" className="h-8 w-8" />
+            <img src={logoImg.src} alt="River Watch logo" className="h-8 w-8" />
             River Watch
           </Link>
 

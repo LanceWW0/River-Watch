@@ -341,7 +341,7 @@ export default function LandingPage() {
           </h2>
           <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-lg shadow-slate-200/50 border border-slate-100 text-center">
             <img
-              src={avatarImg}
+              src={avatarImg.src}
               alt="Laurence Wayne"
               className="w-24 h-24 rounded-full object-cover mx-auto mb-6 shadow-md ring-4 ring-teal-50"
             />
