@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { useMap, useMapEvents, GeoJSON } from "react-leaflet";
+import { useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { calculateVisibleTiles, DEBOUNCE_MS } from "../utils/tileGrid";
 
@@ -18,23 +18,9 @@ const BASE_STYLE = {
 
 // Highlighted style for selected river
 const SELECTED_STYLE = {
-  color: "#0891b2",
-  weight: 5,
-  opacity: 0.9,
-};
-
-// Invisible hit area style for easier clicking
-const HIT_AREA_STYLE = {
-  weight: 20,
-  opacity: 0,
-  color: "#0e7490",
-};
-
-// Hit area hover style (subtle glow effect)
-const HIT_AREA_HOVER_STYLE = {
-  weight: 20,
-  opacity: 0.15,
-  color: "#0891b2",
+  color: "#06b6d4",
+  weight: 6,
+  opacity: 1,
 };
 
 // Dimmed style for non-selected rivers when one is selected
@@ -62,7 +48,7 @@ function getFeatureStyle(feature, selectedRiver = null) {
   const form = feature.properties?.form;
   const name = feature.properties?.watercourse_name;
   const formStyle = FORM_STYLES[form] || {};
-  
+
   // If a river is selected
   if (selectedRiver) {
     if (name === selectedRiver) {
@@ -73,22 +59,23 @@ function getFeatureStyle(feature, selectedRiver = null) {
       return { ...BASE_STYLE, ...formStyle, ...DIMMED_STYLE };
     }
   }
-  
+
   return { ...BASE_STYLE, ...formStyle };
 }
 
 function getHoverStyle(feature, selectedRiver = null) {
   const name = feature.properties?.watercourse_name;
-  
+
   // If this river is selected, keep the selected style
   if (selectedRiver && name === selectedRiver) {
     return getFeatureStyle(feature, selectedRiver);
   }
-  
+
   return {
     ...getFeatureStyle(feature, selectedRiver),
-    opacity: 0.8,
-    weight: 4,
+    color: "#22d3ee",
+    opacity: 0.85,
+    weight: 5,
   };
 }
 
@@ -141,7 +128,7 @@ function RiverInfoPanel({ riverName, stats, onClose }) {
           ×
         </button>
       </div>
-      
+
       <div style={{ marginTop: 12, display: "flex", gap: 16 }}>
         <div>
           <div style={{ fontSize: 20, fontWeight: 600, color: "#334155" }}>
@@ -161,13 +148,13 @@ function RiverInfoPanel({ riverName, stats, onClose }) {
         </div>
       </div>
 
-      <div style={{ 
-        marginTop: 12, 
-        paddingTop: 12, 
+      <div style={{
+        marginTop: 12,
+        paddingTop: 12,
         borderTop: "1px solid #e2e8f0",
-        fontSize: 11, 
-        color: "#94a3b8", 
-        fontStyle: "italic" 
+        fontSize: 11,
+        color: "#94a3b8",
+        fontStyle: "italic"
       }}>
         Water quality data coming soon
       </div>
@@ -177,7 +164,7 @@ function RiverInfoPanel({ riverName, stats, onClose }) {
 
 export default function RiverLayer() {
   const map = useMap();
-  
+
   // Refs for persistent data across re-renders
   // Keys are prefixed: "s_54_-2" for simplified, "f_54_-2" for full detail
   const tilesRef = useRef(new Map()); // Map<prefixedKey, FeatureCollection>
@@ -186,12 +173,18 @@ export default function RiverLayer() {
   const fetchQueueRef = useRef([]);
   const activeFetchesRef = useRef(0);
   const abortControllerRef = useRef(null);
-  
+
+  // Imperative Leaflet layer refs
+  const canvasRef = useRef(null);
+  const groupRef = useRef(null);
+  const tileLayerMapRef = useRef(new Map()); // Map<prefixedKey, L.GeoJSON>
+  const selectedRiverRef = useRef(null);
+
   // State to trigger re-renders when tiles change
   const [visibleKeys, setVisibleKeys] = useState([]);
   const [tileVersion, setTileVersion] = useState(0);
   const [useSimplified, setUseSimplified] = useState(true);
-  
+
   // Selected river state
   const [selectedRiver, setSelectedRiver] = useState(null);
 
@@ -207,13 +200,13 @@ export default function RiverLayer() {
 
     try {
       const res = await fetch(url, { signal });
-      
+
       if (res.status === 404) {
         // Mark as loaded but don't store data
         loadedKeysRef.current.add(prefixedKey);
         return null;
       }
-      
+
       if (!res.ok) {
         console.warn(`Failed to load river tile ${prefixedKey}: ${res.status}`);
         loadedKeysRef.current.add(prefixedKey);
@@ -237,19 +230,19 @@ export default function RiverLayer() {
    */
   const processFetchQueue = useCallback(async () => {
     const signal = abortControllerRef.current?.signal;
-    
+
     while (fetchQueueRef.current.length > 0 && activeFetchesRef.current < MAX_CONCURRENT_FETCHES) {
       const item = fetchQueueRef.current.shift();
       if (!item) continue;
-      
+
       const { tileKey, simplified } = item;
       const prefix = simplified ? "s" : "f";
       const prefixedKey = `${prefix}_${tileKey}`;
-      
+
       if (loadedKeysRef.current.has(prefixedKey)) continue;
-      
+
       activeFetchesRef.current++;
-      
+
       fetchTile(tileKey, simplified, signal).then(() => {
         activeFetchesRef.current--;
         setTileVersion((v) => v + 1);
@@ -266,9 +259,9 @@ export default function RiverLayer() {
     const newItems = tileKeys
       .filter((key) => !loadedKeysRef.current.has(`${prefix}_${key}`))
       .map((tileKey) => ({ tileKey, simplified }));
-    
+
     if (newItems.length === 0) return;
-    
+
     fetchQueueRef.current.push(...newItems);
     processFetchQueue();
   }, [processFetchQueue]);
@@ -278,7 +271,7 @@ export default function RiverLayer() {
    */
   const updateVisibleTiles = useCallback(() => {
     const zoom = map.getZoom();
-    
+
     if (zoom < MIN_ZOOM) {
       setVisibleKeys([]);
       return;
@@ -289,7 +282,7 @@ export default function RiverLayer() {
 
     const bounds = map.getBounds();
     const tiles = calculateVisibleTiles(bounds);
-    
+
     setVisibleKeys(tiles);
     queueTiles(tiles, simplified);
   }, [map, queueTiles]);
@@ -317,7 +310,6 @@ export default function RiverLayer() {
     zoomend: debouncedUpdate,
     click: () => {
       // Clear selection when clicking map background (not a river)
-      // The river click handler will stop propagation
       clearSelection();
     },
   });
@@ -329,18 +321,30 @@ export default function RiverLayer() {
         clearSelection();
       }
     };
-    
+
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [clearSelection]);
 
+  // Create canvas renderer and layer group on mount
+  useEffect(() => {
+    canvasRef.current = L.canvas({ padding: 0.5, tolerance: 10 });
+    groupRef.current = L.layerGroup().addTo(map);
+
+    return () => {
+      if (groupRef.current) {
+        map.removeLayer(groupRef.current);
+      }
+    };
+  }, [map]);
+
   // Initial load on mount
   useEffect(() => {
     abortControllerRef.current = new AbortController();
-    
+
     // Small delay to ensure map is ready
     const timer = setTimeout(updateVisibleTiles, 100);
-    
+
     return () => {
       clearTimeout(timer);
       if (debounceTimerRef.current) {
@@ -350,127 +354,111 @@ export default function RiverLayer() {
     };
   }, [updateVisibleTiles]);
 
-  // Combine visible tiles into a single GeoJSON
-  const combinedGeoJSON = useMemo(() => {
-    const features = [];
+  // Sync tile data into the imperative layer group
+  useEffect(() => {
+    if (!groupRef.current || !canvasRef.current) return;
+
     const prefix = useSimplified ? "s" : "f";
-    
-    for (const key of visibleKeys) {
-      const prefixedKey = `${prefix}_${key}`;
-      const tile = tilesRef.current.get(prefixedKey);
-      if (tile?.features) {
-        features.push(...tile.features);
+    const zoom = map.getZoom();
+    const isInteractive = zoom >= INTERACTIVE_ZOOM;
+
+    // Build set of desired prefixed keys
+    const desiredKeys = new Set(visibleKeys.map((k) => `${prefix}_${k}`));
+
+    // Remove stale tile layers
+    for (const [key, layer] of tileLayerMapRef.current) {
+      if (!desiredKeys.has(key)) {
+        groupRef.current.removeLayer(layer);
+        tileLayerMapRef.current.delete(key);
       }
     }
 
-    return {
-      type: "FeatureCollection",
-      features,
-    };
-  }, [visibleKeys, tileVersion, useSimplified]);
+    // Add new tile layers
+    for (const prefixedKey of desiredKeys) {
+      if (tileLayerMapRef.current.has(prefixedKey)) continue;
+
+      const tileData = tilesRef.current.get(prefixedKey);
+      if (!tileData?.features?.length) continue;
+
+      const tileLayer = L.geoJSON(tileData, {
+        renderer: canvasRef.current,
+        style: (feature) => getFeatureStyle(feature, selectedRiverRef.current),
+        interactive: isInteractive,
+        onEachFeature: (feature, layer) => {
+          const name = feature.properties?.watercourse_name;
+          if (!name || !isInteractive) return;
+
+          layer.on({
+            mouseover: () => {
+              layer.setStyle(getHoverStyle(feature, selectedRiverRef.current));
+            },
+            mouseout: () => {
+              layer.setStyle(getFeatureStyle(feature, selectedRiverRef.current));
+            },
+            click: (e) => {
+              L.DomEvent.stopPropagation(e);
+              setSelectedRiver(name);
+            },
+          });
+        },
+      });
+
+      groupRef.current.addLayer(tileLayer);
+      tileLayerMapRef.current.set(prefixedKey, tileLayer);
+    }
+  }, [visibleKeys, tileVersion, useSimplified, map]);
+
+  // Update styles when selection changes (without re-creating layers)
+  useEffect(() => {
+    selectedRiverRef.current = selectedRiver;
+    if (!groupRef.current) return;
+
+    groupRef.current.eachLayer((tileLayer) => {
+      if (tileLayer.eachLayer) {
+        tileLayer.eachLayer((layer) => {
+          if (layer.feature) {
+            layer.setStyle(getFeatureStyle(layer.feature, selectedRiver));
+          }
+        });
+      }
+    });
+  }, [selectedRiver]);
 
   // Calculate stats for selected river
   const riverStats = useMemo(() => {
     if (!selectedRiver) return null;
-    
+
     let segmentCount = 0;
     let totalLength = 0;
     const forms = new Set();
-    
-    for (const feature of combinedGeoJSON.features) {
-      if (feature.properties?.watercourse_name === selectedRiver) {
-        segmentCount++;
-        totalLength += feature.properties?.length || 0;
-        if (feature.properties?.form) {
-          forms.add(FORM_LABELS[feature.properties.form] || feature.properties.form);
+    const prefix = useSimplified ? "s" : "f";
+
+    for (const key of visibleKeys) {
+      const tile = tilesRef.current.get(`${prefix}_${key}`);
+      if (!tile?.features) continue;
+      for (const feature of tile.features) {
+        if (feature.properties?.watercourse_name === selectedRiver) {
+          segmentCount++;
+          totalLength += feature.properties?.length || 0;
+          if (feature.properties?.form) {
+            forms.add(FORM_LABELS[feature.properties.form] || feature.properties.form);
+          }
         }
       }
     }
-    
+
     return {
       segmentCount,
       totalLengthKm: (totalLength / 1000).toFixed(1),
       forms: Array.from(forms),
     };
-  }, [selectedRiver, combinedGeoJSON]);
-
-  // Style function for GeoJSON - uses selectedRiver from closure
-  const styleFunction = useCallback((feature) => {
-    return getFeatureStyle(feature, selectedRiver);
-  }, [selectedRiver]);
-
-  // Handler for visible layer (non-interactive, just for display)
-  const onEachFeatureVisible = useCallback((feature, layer) => {
-    layer.options.interactive = false;
-  }, []);
-
-  // Handler for hit area layer (handles all interactions)
-  const onEachFeatureHitArea = useCallback((feature, layer) => {
-    const zoom = map.getZoom();
-    const isInteractive = zoom >= INTERACTIVE_ZOOM;
-    const name = feature.properties?.watercourse_name;
-    
-    if (!isInteractive) {
-      layer.options.interactive = false;
-      return;
-    }
-
-    // Set cursor style
-    const element = layer.getElement?.();
-    if (element) {
-      element.style.cursor = "pointer";
-    }
-
-    // Hover handlers - show subtle glow on the hit area
-    layer.on({
-      mouseover: () => {
-        layer.setStyle(HIT_AREA_HOVER_STYLE);
-      },
-      mouseout: () => {
-        layer.setStyle(HIT_AREA_STYLE);
-      },
-      click: (e) => {
-        // Stop propagation to prevent map click handler from clearing selection
-        L.DomEvent.stopPropagation(e);
-        
-        // Only select named rivers
-        if (name) {
-          setSelectedRiver(name);
-        }
-      },
-    });
-  }, [map]);
-
-  // Don't render anything if no features or zoomed out
-  if (visibleKeys.length === 0 || combinedGeoJSON.features.length === 0) {
-    return null;
-  }
-
-  // Generate a stable key based on visible tiles, version, LOD level, and selected river
-  // Including these forces re-render when they change
-  const geoJSONKey = `rivers-${useSimplified ? "s" : "f"}-${visibleKeys.sort().join("-")}-${tileVersion}-${selectedRiver || "none"}`;
+  }, [selectedRiver, visibleKeys, tileVersion, useSimplified]);
 
   return (
-    <>
-      {/* Hit area layer - wider invisible layer for easier clicking */}
-      <GeoJSON
-        key={`hitarea-${geoJSONKey}`}
-        data={combinedGeoJSON}
-        style={HIT_AREA_STYLE}
-        onEachFeature={onEachFeatureHitArea}
-      />
-      {/* Visible layer - displays the styled rivers */}
-      <GeoJSON
-        key={geoJSONKey}
-        data={combinedGeoJSON}
-        style={styleFunction}
-        onEachFeature={onEachFeatureVisible}
-      />
-      <RiverInfoPanel 
-        riverName={selectedRiver} 
-        stats={riverStats} 
-        onClose={clearSelection}
-      />
-    </>
+    <RiverInfoPanel
+      riverName={selectedRiver}
+      stats={riverStats}
+      onClose={clearSelection}
+    />
   );
 }
