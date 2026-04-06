@@ -83,6 +83,11 @@ def main():
         default=None,
         help="Name of the river name column (auto-detected if not set)",
     )
+    parser.add_argument(
+        "--named-only",
+        action="store_true",
+        help="Only include named rivers (drop unnamed streams). Great for the zoomed-out layer.",
+    )
     args = parser.parse_args()
 
     if args.output is None:
@@ -153,15 +158,21 @@ def main():
     # ------------------------------------------------------------------
     # Step 5: Handle unnamed segments
     # ------------------------------------------------------------------
-    # Give unnamed segments a unique identifier so they don't all
-    # merge into one giant blob. We use 'unnamed_<index>' as the key.
-    gdf = gdf.copy()
-    gdf["_merge_key"] = gdf[name_col].copy()
+    if args.named_only:
+        print("Dropping unnamed watercourses (--named-only)...")
+        gdf = gdf[named].copy()
+        print(f"  {len(gdf)} named segments remaining\n")
+        gdf["_merge_key"] = gdf[name_col].copy()
+    else:
+        # Give unnamed segments a unique identifier so they don't all
+        # merge into one giant blob. We use 'unnamed_<index>' as the key.
+        gdf = gdf.copy()
+        gdf["_merge_key"] = gdf[name_col].copy()
 
-    unnamed_mask = gdf["_merge_key"].isna() | (gdf["_merge_key"] == "")
-    gdf.loc[unnamed_mask, "_merge_key"] = [
-        f"_unnamed_{i}" for i in range(unnamed_mask.sum())
-    ]
+        unnamed_mask = gdf["_merge_key"].isna() | (gdf["_merge_key"] == "")
+        gdf.loc[unnamed_mask, "_merge_key"] = [
+            f"_unnamed_{i}" for i in range(unnamed_mask.sum())
+        ]
 
     # ------------------------------------------------------------------
     # Step 6: Merge segments by river name

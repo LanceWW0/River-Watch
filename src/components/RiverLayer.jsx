@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useMap, useMapEvents, GeoJSON } from "react-leaflet";
 import L from "leaflet";
@@ -18,23 +20,16 @@ const BASE_STYLE = {
 
 // Highlighted style for selected river
 const SELECTED_STYLE = {
-  color: "#0891b2",
+  color: "#06b6d4",
+  weight: 6,
+  opacity: 1.0,
+};
+
+// Hover style
+const HOVER_STYLE = {
+  color: "#22d3ee",
   weight: 5,
-  opacity: 0.9,
-};
-
-// Invisible hit area style for easier clicking
-const HIT_AREA_STYLE = {
-  weight: 20,
-  opacity: 0,
-  color: "#0e7490",
-};
-
-// Hit area hover style (subtle glow effect)
-const HIT_AREA_HOVER_STYLE = {
-  weight: 20,
-  opacity: 0.15,
-  color: "#0891b2",
+  opacity: 0.85,
 };
 
 // Dimmed style for non-selected rivers when one is selected
@@ -79,16 +74,19 @@ function getFeatureStyle(feature, selectedRiver = null) {
 
 function getHoverStyle(feature, selectedRiver = null) {
   const name = feature.properties?.watercourse_name;
-  
+
   // If this river is selected, keep the selected style
   if (selectedRiver && name === selectedRiver) {
     return getFeatureStyle(feature, selectedRiver);
   }
-  
+
+  const form = feature.properties?.form;
+  const formStyle = FORM_STYLES[form] || {};
+
   return {
-    ...getFeatureStyle(feature, selectedRiver),
-    opacity: 0.8,
-    weight: 4,
+    ...BASE_STYLE,
+    ...formStyle,
+    ...HOVER_STYLE,
   };
 }
 
@@ -399,41 +397,30 @@ export default function RiverLayer() {
     return getFeatureStyle(feature, selectedRiver);
   }, [selectedRiver]);
 
-  // Handler for visible layer (non-interactive, just for display)
-  const onEachFeatureVisible = useCallback((feature, layer) => {
-    layer.options.interactive = false;
-  }, []);
+  // Ref to track selected river in event handlers without stale closures
+  const selectedRiverRef = useRef(selectedRiver);
+  selectedRiverRef.current = selectedRiver;
 
-  // Handler for hit area layer (handles all interactions)
-  const onEachFeatureHitArea = useCallback((feature, layer) => {
+  // Handler for river features - hover highlight and click selection
+  const onEachFeature = useCallback((feature, layer) => {
     const zoom = map.getZoom();
-    const isInteractive = zoom >= INTERACTIVE_ZOOM;
     const name = feature.properties?.watercourse_name;
-    
-    if (!isInteractive) {
+
+    if (zoom < INTERACTIVE_ZOOM) {
       layer.options.interactive = false;
       return;
     }
 
-    // Set cursor style
-    const element = layer.getElement?.();
-    if (element) {
-      element.style.cursor = "pointer";
-    }
-
-    // Hover handlers - show subtle glow on the hit area
     layer.on({
       mouseover: () => {
-        layer.setStyle(HIT_AREA_HOVER_STYLE);
+        layer.setStyle(getHoverStyle(feature, selectedRiverRef.current));
+        layer.bringToFront();
       },
       mouseout: () => {
-        layer.setStyle(HIT_AREA_STYLE);
+        layer.setStyle(getFeatureStyle(feature, selectedRiverRef.current));
       },
       click: (e) => {
-        // Stop propagation to prevent map click handler from clearing selection
         L.DomEvent.stopPropagation(e);
-        
-        // Only select named rivers
         if (name) {
           setSelectedRiver(name);
         }
@@ -452,19 +439,11 @@ export default function RiverLayer() {
 
   return (
     <>
-      {/* Hit area layer - wider invisible layer for easier clicking */}
-      <GeoJSON
-        key={`hitarea-${geoJSONKey}`}
-        data={combinedGeoJSON}
-        style={HIT_AREA_STYLE}
-        onEachFeature={onEachFeatureHitArea}
-      />
-      {/* Visible layer - displays the styled rivers */}
       <GeoJSON
         key={geoJSONKey}
         data={combinedGeoJSON}
         style={styleFunction}
-        onEachFeature={onEachFeatureVisible}
+        onEachFeature={onEachFeature}
       />
       <RiverInfoPanel 
         riverName={selectedRiver} 

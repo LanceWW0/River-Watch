@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useCallback, useState } from "react";
 import {
   MapContainer,
@@ -542,7 +544,7 @@ export default function MapView() {
         }}
       >
         <img
-          src={avatarImg}
+          src={avatarImg.src}
           alt="Laurence Wayne"
           style={{
             width: 28,
