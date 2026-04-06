@@ -34,3 +34,5 @@ out
 # Large pre-processed data files
 raw/
 sites.geojson
+WatercourseLink.*
+rivers_merged.geojson
