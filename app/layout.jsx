@@ -4,11 +4,60 @@ import Navbar from "../src/components/Navbar";
 import "../src/index.css";
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+const SITE_URL = "https://riverwatch.earth";
 
 export const metadata = {
-  title: "River Watch",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "River Watch — England's River Health, Made Visible",
+    template: "%s | River Watch",
+  },
+  description:
+    "Explore decades of water quality data from every river, lake and estuary in England. 111,000+ sampling points, 60 million+ measurements, all in one place.",
+  keywords: [
+    "river water quality",
+    "England rivers",
+    "water pollution",
+    "Environment Agency",
+    "sampling points",
+    "river health",
+    "water quality data",
+    "river map",
+    "fish surveys",
+    "invertebrate monitoring",
+  ],
+  authors: [{ name: "Laurence Wayne", url: "https://laurence-wayne.com/about" }],
+  creator: "Laurence Wayne",
+  openGraph: {
+    type: "website",
+    locale: "en_GB",
+    url: SITE_URL,
+    siteName: "River Watch",
+    title: "River Watch — England's River Health, Made Visible",
+    description:
+      "Explore decades of water quality data from every river, lake and estuary in England. 111,000+ sampling points, 60 million+ measurements.",
+    images: [
+      {
+        url: "/thumbnail.png",
+        width: 1200,
+        height: 630,
+        alt: "River Watch — interactive map of England's river water quality",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "River Watch — England's River Health, Made Visible",
+    description:
+      "Explore decades of water quality data from every river, lake and estuary in England. 111,000+ sampling points, 60 million+ measurements.",
+    images: ["/thumbnail.png"],
+  },
   icons: {
     icon: { url: "/logo.png", type: "image/png" },
+    apple: "/logo.png",
+  },
+  alternates: {
+    canonical: SITE_URL,
   },
 };
 
