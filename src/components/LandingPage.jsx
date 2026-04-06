@@ -33,10 +33,16 @@ function useReveal(threshold = 0.15) {
 /* ── Animated counter hook ─────────────────────────────────── */
 
 function useCountUp(target, duration = 2000, start = false) {
-  const [value, setValue] = useState(0);
+  // Initialise with target so SSR/static HTML shows real numbers for SEO
+  const [value, setValue] = useState(target);
 
   useEffect(() => {
-    if (!start) return;
+    // Reset to 0 on mount so the animation can run from zero
+    if (!start) {
+      setValue(0);
+      return;
+    }
+
     let raf;
     const t0 = performance.now();
 

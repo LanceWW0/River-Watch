@@ -8,6 +8,6 @@ export default function robots() {
         allow: "/",
       },
     ],
-    sitemap: "https://riverwatch.earth/sitemap.xml",
+    sitemap: "https://www.riverwatch.earth/sitemap.xml",
   };
 }

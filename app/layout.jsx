@@ -4,7 +4,7 @@ import Navbar from "../src/components/Navbar";
 import "../src/index.css";
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-const SITE_URL = "https://riverwatch.earth";
+const SITE_URL = "https://www.riverwatch.earth";
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -13,7 +13,7 @@ export const metadata = {
     template: "%s | River Watch",
   },
   description:
-    "Explore decades of water quality data from every river, lake and estuary in England. 111,000+ sampling points, 60 million+ measurements, all in one place.",
+    "Explore decades of water quality data from every river, lake and estuary in England. Interactive maps, pollution indicators, and health trends — all free and open source.",
   keywords: [
     "river water quality",
     "England rivers",
@@ -35,7 +35,7 @@ export const metadata = {
     siteName: "River Watch",
     title: "River Watch — England's River Health, Made Visible",
     description:
-      "Explore decades of water quality data from every river, lake and estuary in England. 111,000+ sampling points, 60 million+ measurements.",
+      "Explore decades of water quality data from every river, lake and estuary in England. Interactive maps, pollution indicators, and health trends — all free and open source.",
     images: [
       {
         url: "/thumbnail.png",
@@ -49,7 +49,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "River Watch — England's River Health, Made Visible",
     description:
-      "Explore decades of water quality data from every river, lake and estuary in England. 111,000+ sampling points, 60 million+ measurements.",
+      "Explore decades of water quality data from every river, lake and estuary in England. Interactive maps, pollution indicators, and health trends — all free and open source.",
     images: ["/thumbnail.png"],
   },
   icons: {
