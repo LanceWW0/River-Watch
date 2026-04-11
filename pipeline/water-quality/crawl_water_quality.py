@@ -62,16 +62,16 @@ PAGE_LIMIT = 250
 # Key determinand notations we care about
 KEY_DETERMINANDS = {
     "0076",  # Temperature
-    "0117",  # Orthophosphate
-    "0135",  # Nitrate
-    "0111",  # Ammoniacal Nitrogen
-    "9901",  # Dissolved Oxygen % sat
-    "0180",  # Dissolved Oxygen mg/l
-    "0085",  # BOD
+    "0117",  # Nitrate as N
+    "0135",  # Suspended Solids at 105C
+    "0111",  # Ammoniacal Nitrogen as N
+    "9901",  # Dissolved Oxygen % saturation
+    "0180",  # Orthophosphate, reactive as P
+    "0085",  # BOD 5 Day ATU
     "0061",  # pH
-    "0101",  # Conductivity
-    "0062",  # Suspended Solids
-    "0116",  # Nitrite
+    "0101",  # Conductivity at 25C
+    "0062",  # Suspended Solids (alternative code)
+    "0116",  # Nitrogen, Total Oxidised as N
 }
 
 # CSV output columns
@@ -186,24 +186,48 @@ def fetch_observations(notation, rate_delay, verbose=True):
                 return []
 
         # Extract observations
+        # New API uses SOSA ontology:
+        #   observedProperty.notation  = determinand code (was determinand.notation)
+        #   hasSimpleResult            = the value (was result)
+        #   phenomenonTime             = sample datetime (was sample.dateTime)
+        #   observedProperty.prefLabel = determinand label
+        #   hasUnit                    = unit label
+        #   hasSample.sampleMaterialType.prefLabel = material type
         items = data.get("member", data.get("items", []))
         kept = 0
         for item in items:
-            det = item.get("determinand", {})
+            det = item.get("observedProperty", {})
             det_notation = det.get("notation", "")
 
             if det_notation not in KEY_DETERMINANDS:
                 continue
 
+            # Get the result — hasSimpleResult is the plain value
+            result = item.get("hasSimpleResult", "")
+
+            # Get result qualifier if present
+            result_obj = item.get("hasResult", {})
+            result_qualifier = ""
+            if isinstance(result_obj, dict):
+                result_qualifier = result_obj.get("notation", "")
+
+            # Get material type
+            sample = item.get("hasSample", {})
+            material_type = ""
+            if isinstance(sample, dict):
+                mat = sample.get("sampleMaterialType", {})
+                if isinstance(mat, dict):
+                    material_type = mat.get("prefLabel", "")
+
             obs = {
                 "notation": notation,
-                "sample_date": item.get("sample", {}).get("dateTime", ""),
+                "sample_date": item.get("phenomenonTime", ""),
                 "determinand_notation": det_notation,
-                "determinand_label": det.get("label", ""),
-                "result": item.get("result", ""),
-                "result_qualifier": item.get("resultQualifier", {}).get("notation", ""),
-                "unit": det.get("unit", {}).get("label", ""),
-                "material_type": item.get("sample", {}).get("sampledMaterialType", {}).get("label", ""),
+                "determinand_label": det.get("prefLabel", det.get("altLabel", "")),
+                "result": result,
+                "result_qualifier": result_qualifier,
+                "unit": item.get("hasUnit", ""),
+                "material_type": material_type,
             }
             all_observations.append(obs)
             kept += 1
