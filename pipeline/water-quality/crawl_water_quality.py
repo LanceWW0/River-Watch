@@ -152,28 +152,49 @@ def fetch_observations(notation, rate_delay, verbose=True):
         if verbose:
             print(f"    Fetching page {page + 1} (skip={skip})...", end="", flush=True)
 
-        try:
-            resp = requests.get(url, params=params, headers=headers, timeout=30)
-
-            if resp.status_code == 404:
-                if verbose:
-                    print(f" 404 — not found in API")
-                return []
-            elif resp.status_code == 429:
-                print(f" RATE LIMITED, waiting 30s...")
-                time.sleep(30)
-                continue
-            elif resp.status_code >= 500:
-                print(f" server error {resp.status_code}, retrying in 10s...")
-                time.sleep(10)
+        # Fetch with retries on transient failures (5xx, network errors).
+        # Backoff schedule: 2s, 10s, 30s before giving up on this page.
+        BACKOFFS = [2, 10, 30]
+        data = None
+        last_err = None
+        for attempt in range(len(BACKOFFS) + 1):
+            try:
                 resp = requests.get(url, params=params, headers=headers, timeout=30)
-                resp.raise_for_status()
-            else:
-                resp.raise_for_status()
 
-            data = resp.json()
-        except requests.exceptions.RequestException as e:
-            print(f" FAILED: {e}")
+                if resp.status_code == 404:
+                    if verbose:
+                        print(f" 404 — not found in API")
+                    return []
+                elif resp.status_code == 429:
+                    print(f" RATE LIMITED, waiting 30s...")
+                    time.sleep(30)
+                    continue  # retry immediately, doesn't count against attempts
+                elif resp.status_code >= 500:
+                    last_err = f"server error {resp.status_code}"
+                    if attempt < len(BACKOFFS):
+                        wait = BACKOFFS[attempt]
+                        print(f" {last_err}, retrying in {wait}s (attempt {attempt + 1}/{len(BACKOFFS)})...")
+                        time.sleep(wait)
+                        continue
+                    else:
+                        print(f" {last_err} — giving up on this page")
+                        return all_observations
+
+                resp.raise_for_status()
+                data = resp.json()
+                break
+
+            except requests.exceptions.RequestException as e:
+                last_err = str(e)
+                if attempt < len(BACKOFFS):
+                    wait = BACKOFFS[attempt]
+                    print(f" network error ({last_err}), retrying in {wait}s...")
+                    time.sleep(wait)
+                    continue
+                print(f" FAILED after {len(BACKOFFS) + 1} attempts: {last_err}")
+                return all_observations
+
+        if data is None:
             return all_observations
 
         # Get total count on first page
@@ -187,11 +208,13 @@ def fetch_observations(notation, rate_delay, verbose=True):
 
         # Extract observations
         # New API uses SOSA ontology:
-        #   observedProperty.notation  = determinand code (was determinand.notation)
-        #   hasSimpleResult            = the value (was result)
-        #   phenomenonTime             = sample datetime (was sample.dateTime)
-        #   observedProperty.prefLabel = determinand label
-        #   hasUnit                    = unit label
+        #   observedProperty.notation           = determinand code
+        #   observedProperty.prefLabel          = determinand label
+        #   phenomenonTime                      = sample datetime
+        #   hasResult.numericValue              = the value (plain readings)
+        #   hasResult.upperBound                = the value (for "<X" below-LOD readings)
+        #   hasResult.hasUnit.prefLabel         = unit label
+        #   hasSimpleResult                     = fallback flat string, may include "<"/">" + unit
         #   hasSample.sampleMaterialType.prefLabel = material type
         items = data.get("member", data.get("items", []))
         kept = 0
@@ -202,14 +225,58 @@ def fetch_observations(notation, rate_delay, verbose=True):
             if det_notation not in KEY_DETERMINANDS:
                 continue
 
-            # Get the result — hasSimpleResult is the plain value
-            result = item.get("hasSimpleResult", "")
-
-            # Get result qualifier if present
-            result_obj = item.get("hasResult", {})
+            # ---- Result + qualifier ----
+            # Prefer structured hasResult (numericValue / upperBound).
+            # Fall back to parsing hasSimpleResult for a leading "<" or ">".
+            result = ""
             result_qualifier = ""
-            if isinstance(result_obj, dict):
-                result_qualifier = result_obj.get("notation", "")
+            unit = ""
+
+            hr = item.get("hasResult")
+            if isinstance(hr, dict):
+                numeric = hr.get("numericValue")
+                upper = hr.get("upperBound")
+                if numeric is not None:
+                    result = str(numeric)
+                elif upper is not None:
+                    result = str(upper)
+                    result_qualifier = "<"
+
+                unit_obj = hr.get("hasUnit")
+                if isinstance(unit_obj, dict):
+                    unit = (
+                        unit_obj.get("altLabel")
+                        or unit_obj.get("prefLabel")
+                        or unit_obj.get("notation")
+                        or ""
+                    )
+                elif isinstance(unit_obj, str):
+                    unit = unit_obj
+
+            # Fallback: flat hasSimpleResult string
+            if result == "":
+                raw = str(item.get("hasSimpleResult", "")).strip()
+                if raw.startswith("<") or raw.startswith(">"):
+                    result_qualifier = raw[0]
+                    raw = raw[1:].strip()
+                result = raw
+
+            # Fallback for unit: top-level hasUnit (sometimes a string, sometimes a dict)
+            if unit == "":
+                top_unit = item.get("hasUnit", "")
+                if isinstance(top_unit, dict):
+                    unit = (
+                        top_unit.get("altLabel")
+                        or top_unit.get("prefLabel")
+                        or top_unit.get("notation")
+                        or ""
+                    )
+                elif isinstance(top_unit, str):
+                    unit = top_unit
+
+            # Skip rows with no usable result
+            if result == "":
+                continue
 
             # Get material type
             sample = item.get("hasSample", {})
@@ -226,7 +293,7 @@ def fetch_observations(notation, rate_delay, verbose=True):
                 "determinand_label": det.get("prefLabel", det.get("altLabel", "")),
                 "result": result,
                 "result_qualifier": result_qualifier,
-                "unit": item.get("hasUnit", ""),
+                "unit": unit,
                 "material_type": material_type,
             }
             all_observations.append(obs)
@@ -349,9 +416,6 @@ def main():
         "total_observations": 0,
         "start_time": time.time(),
     }
-
-    # Progress tracking
-    log_path = os.path.join(args.output_dir, "_progress.log")
 
     for i, point in enumerate(remaining):
         notation = point["notation"]
