@@ -21,18 +21,18 @@ const LAYER_CONFIG = {
     chartColor: "#3b82f6",
   },
   fish: {
-    color: "#16a34a",
-    borderColor: "#15803d",
-    bgColor: "#f0fdf4",
+    color: "#7c3aed",
+    borderColor: "#6d28d9",
+    bgColor: "#f5f3ff",
     label: "Fish Survey",
-    chartColor: "#16a34a",
+    chartColor: "#7c3aed",
   },
   invertebrates: {
-    color: "#d97706",
-    borderColor: "#b45309",
-    bgColor: "#fffbeb",
+    color: "#0d9488",
+    borderColor: "#0f766e",
+    bgColor: "#f0fdfa",
     label: "Invertebrates",
-    chartColor: "#d97706",
+    chartColor: "#0d9488",
   },
 };
 
@@ -40,10 +40,12 @@ const LAYER_CONFIG = {
 const INV_INDEX_INFO = {
   BMWP_TOTAL: {
     name: "BMWP Score",
-    description: "River health indicator. Above 100 is good, below 50 is poor.",
+    description: "River health indicator. 150+ excellent, 100+ good, below 25 bad.",
     thresholds: [
-      { value: 100, label: "Good", color: "#22c55e" },
-      { value: 50, label: "Moderate", color: "#eab308" },
+      { value: 150, label: "Excellent", color: "#60a5fa" },
+      { value: 100, label: "Good", color: "#16a34a" },
+      { value: 50, label: "Moderate", color: "#f59e0b" },
+      { value: 25, label: "Poor", color: "#f97316" },
     ],
     goodAbove: 100,
   },
@@ -51,8 +53,9 @@ const INV_INDEX_INFO = {
     name: "Avg Score Per Taxon",
     description: "Average sensitivity of species. Above 6 suggests clean water.",
     thresholds: [
-      { value: 6, label: "Good", color: "#22c55e" },
-      { value: 5, label: "Moderate", color: "#eab308" },
+      { value: 6, label: "Good", color: "#16a34a" },
+      { value: 5, label: "Moderate", color: "#f59e0b" },
+      { value: 4, label: "Poor", color: "#f97316" },
     ],
     goodAbove: 6,
   },
@@ -65,8 +68,10 @@ const INV_INDEX_INFO = {
     name: "WHPT Total Score",
     description: "Modern replacement for BMWP. Higher = healthier.",
     thresholds: [
-      { value: 100, label: "Good", color: "#22c55e" },
-      { value: 50, label: "Moderate", color: "#eab308" },
+      { value: 150, label: "Excellent", color: "#60a5fa" },
+      { value: 100, label: "Good", color: "#16a34a" },
+      { value: 50, label: "Moderate", color: "#f59e0b" },
+      { value: 25, label: "Poor", color: "#f97316" },
     ],
     goodAbove: 100,
   },
@@ -74,8 +79,9 @@ const INV_INDEX_INFO = {
     name: "WHPT Avg Score Per Taxon",
     description: "Higher = cleaner water.",
     thresholds: [
-      { value: 6, label: "Good", color: "#22c55e" },
-      { value: 5, label: "Moderate", color: "#eab308" },
+      { value: 6, label: "Good", color: "#16a34a" },
+      { value: 5, label: "Moderate", color: "#f59e0b" },
+      { value: 4, label: "Poor", color: "#f97316" },
     ],
     goodAbove: 6,
   },
@@ -1359,9 +1365,11 @@ export default function SidePanel({ selectedItem, onClose, wqConfig, getPointDet
     const bmwp = itemData.latestBmwp;
     let bmwpStatus = { label: "No BMWP", bg: "#f3f4f6", color: "#6b7280" };
     if (bmwp != null) {
-      if (bmwp >= 100) bmwpStatus = { label: `BMWP ${bmwp}`, bg: "#dcfce7", color: "#166534" };
-      else if (bmwp >= 50) bmwpStatus = { label: `BMWP ${bmwp}`, bg: "#fef3c7", color: "#92400e" };
-      else bmwpStatus = { label: `BMWP ${bmwp}`, bg: "#fee2e2", color: "#991b1b" };
+      if (bmwp >= 150) bmwpStatus = { label: `BMWP ${bmwp} - Excellent`, bg: "#dbeafe", color: "#1e40af" };
+      else if (bmwp >= 100) bmwpStatus = { label: `BMWP ${bmwp} - Good`, bg: "#dcfce7", color: "#166534" };
+      else if (bmwp >= 50) bmwpStatus = { label: `BMWP ${bmwp} - Moderate`, bg: "#fef3c7", color: "#92400e" };
+      else if (bmwp >= 25) bmwpStatus = { label: `BMWP ${bmwp} - Poor`, bg: "#ffedd5", color: "#9a3412" };
+      else bmwpStatus = { label: `BMWP ${bmwp} - Bad`, bg: "#fee2e2", color: "#991b1b" };
     }
     statusBadge = bmwpStatus;
     regionBadge = itemData.area;

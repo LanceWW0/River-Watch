@@ -21,23 +21,30 @@ const LAYERS = [
   {
     key: "fish",
     label: "Fish Surveys",
-    color: "#16a34a",
+    color: "#7c3aed",
     emoji: "🐟",
     description: "Fish population sites",
   },
   {
     key: "invertebrates",
     label: "Invertebrates",
-    color: "#d97706",
+    color: "#0d9488",
     emoji: "🦐",
     description: "River health monitoring",
   },
 ];
 
-// Status filter order and short codes
-// Display labels for status codes. "High" in WFD jargon → "Excellent" for clarity.
-// configKey maps to the key in wq_config.json for colour lookup.
-const STATUS_ORDER = [
+// Shared health palette colours (matches wq_config.json)
+const HEALTH_COLORS = {
+  High: "#60a5fa",
+  Good: "#16a34a",
+  Moderate: "#f59e0b",
+  Poor: "#f97316",
+  Bad: "#dc2626",
+};
+
+// WQ status filter chips
+const WQ_STATUS_ORDER = [
   { code: "H", label: "Excellent", configKey: "High" },
   { code: "G", label: "Good", configKey: "Good" },
   { code: "M", label: "Moderate", configKey: "Moderate" },
@@ -46,6 +53,69 @@ const STATUS_ORDER = [
   { code: "U", label: "Unscored", color: "#9ca3af" },
 ];
 
+// Invertebrate status filter chips (BMWP 5-tier)
+const INV_STATUS_ORDER = [
+  { code: "E", label: "Excellent", configKey: "High" },
+  { code: "G", label: "Good", configKey: "Good" },
+  { code: "M", label: "Moderate", configKey: "Moderate" },
+  { code: "P", label: "Poor", configKey: "Poor" },
+  { code: "B", label: "Bad", configKey: "Bad" },
+  { code: "N", label: "No data", color: "#9ca3af" },
+];
+
+/**
+ * Renders a row of toggleable status filter chips.
+ */
+function StatusChips({ items, filter, onToggle, statusConfig }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 4,
+        padding: "4px 12px 8px 50px",
+        maxWidth: 220,
+      }}
+    >
+      {items.map(({ code, label, configKey, color: hardColor }) => {
+        const active = filter[code] !== false;
+        const color =
+          hardColor ||
+          statusConfig?.[configKey]?.color ||
+          HEALTH_COLORS[configKey] ||
+          "#9ca3af";
+        return (
+          <button
+            key={code}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggle(code);
+            }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 8px",
+              borderRadius: 99,
+              border: `1.5px solid ${color}`,
+              background: active ? color : "transparent",
+              color: active ? "white" : color,
+              fontSize: 10,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              opacity: active ? 1 : 0.5,
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function LayerToggle({
   layers,
   onToggle,
@@ -53,6 +123,8 @@ export default function LayerToggle({
   statusFilter = {},
   onStatusToggle,
   statusConfig,
+  invStatusFilter = {},
+  onInvStatusToggle,
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -104,6 +176,7 @@ export default function LayerToggle({
             const isActive = layers[layer.key];
             const count = counts[layer.key];
             const isWq = layer.key === "waterQuality";
+            const isInv = layer.key === "invertebrates";
 
             return (
               <div key={layer.key}>
@@ -214,49 +287,24 @@ export default function LayerToggle({
                   </div>
                 </label>
 
-                {/* Status filter chips — only for Water Quality when active */}
+                {/* WQ status filter chips */}
                 {isWq && isActive && onStatusToggle && (
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 4,
-                      padding: "4px 12px 8px 50px",
-                      maxWidth: 220,
-                    }}
-                  >
-                    {STATUS_ORDER.map(({ code, label, configKey, color: hardColor }) => {
-                      const active = statusFilter[code] !== false;
-                      const color = hardColor || statusConfig?.[configKey]?.color || "#9ca3af";
-                      return (
-                        <button
-                          key={code}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onStatusToggle(code);
-                          }}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            padding: "2px 8px",
-                            borderRadius: 99,
-                            border: `1.5px solid ${color}`,
-                            background: active ? color : "transparent",
-                            color: active ? "white" : color,
-                            fontSize: 10,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            transition: "all 0.15s",
-                            opacity: active ? 1 : 0.5,
-                          }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <StatusChips
+                    items={WQ_STATUS_ORDER}
+                    filter={statusFilter}
+                    onToggle={onStatusToggle}
+                    statusConfig={statusConfig}
+                  />
+                )}
+
+                {/* Invertebrate BMWP status filter chips */}
+                {isInv && isActive && onInvStatusToggle && (
+                  <StatusChips
+                    items={INV_STATUS_ORDER}
+                    filter={invStatusFilter}
+                    onToggle={onInvStatusToggle}
+                    statusConfig={statusConfig}
+                  />
                 )}
               </div>
             );

@@ -20,6 +20,7 @@ import useWqIndex from "../hooks/useWqIndex";
 import avatarImg from "../assets/me_snow.jpeg";
 
 // Layer configuration with emojis and colors
+// Identity colours are used for clusters, toggles, and UI chrome — NOT for health status.
 const LAYER_STYLES = {
   waterQuality: {
     emoji: "💧",
@@ -31,42 +32,37 @@ const LAYER_STYLES = {
   fish: {
     emoji: "🐟",
     label: "Fish",
-    color: "#16a34a",
-    bgColor: "rgba(22, 163, 74, 0.15)",
-    borderColor: "#15803d",
+    color: "#7c3aed",
+    bgColor: "rgba(124, 58, 237, 0.15)",
+    borderColor: "#6d28d9",
   },
   invertebrates: {
     emoji: "🦐",
     label: "Invertebrates",
-    color: "#d97706",
-    bgColor: "rgba(217, 119, 6, 0.15)",
-    borderColor: "#b45309",
+    color: "#0d9488",
+    bgColor: "rgba(13, 148, 136, 0.15)",
+    borderColor: "#0f766e",
   },
 };
 
 // Status code → short label for tooltips
 const STATUS_LABELS = { H: "Excellent", G: "Good", M: "Moderate", P: "Poor", B: "Bad" };
 
+// BMWP score → 5-tier health status (shared health palette)
+function getBmwpTier(score) {
+  if (score == null) return null;
+  if (score >= 150) return { key: "E", label: "Excellent", color: "#60a5fa" };
+  if (score >= 100) return { key: "G", label: "Good", color: "#16a34a" };
+  if (score >= 50) return { key: "M", label: "Moderate", color: "#f59e0b" };
+  if (score >= 25) return { key: "P", label: "Poor", color: "#f97316" };
+  return { key: "B", label: "Bad", color: "#dc2626" };
+}
+
 // Create custom icon for individual markers
-function createEmojiIcon(emoji, isSelected = false, bgColor = null, healthColor = null) {
+function createEmojiIcon(emoji, isSelected = false, bgColor = null) {
   const size = isSelected ? 36 : 28;
   const fontSize = isSelected ? 20 : 16;
   const bg = bgColor || "white";
-
-  // Health indicator dot for invertebrates
-  const healthDot = healthColor
-    ? `<div style="
-        position: absolute;
-        bottom: -2px;
-        right: -2px;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: ${healthColor};
-        border: 2px solid white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-      "></div>`
-    : "";
 
   return L.divIcon({
     className: "emoji-marker",
@@ -86,7 +82,6 @@ function createEmojiIcon(emoji, isSelected = false, bgColor = null, healthColor 
         transition: transform 0.15s;
       ">
         ${emoji}
-        ${healthDot}
       </div>
     `,
     iconSize: [size, size],
@@ -278,6 +273,7 @@ function MapContents({
   setSelectedItem,
   onCountsChange,
   statusFilter,
+  invStatusFilter,
   wqPoints,
   wqLookup,
   wqConfig,
@@ -315,6 +311,16 @@ function MapContents({
     if (!layerVisibility.waterQuality) return [];
     return wqPoints.filter((p) => statusFilter[p.s] !== false);
   }, [wqPoints, statusFilter, layerVisibility.waterQuality]);
+
+  // Filter invertebrate sites by BMWP health tier
+  const visibleInvSites = useMemo(() => {
+    if (!layerVisibility.invertebrates) return [];
+    return invSites.filter((site) => {
+      const tier = getBmwpTier(site.latestBmwp);
+      if (!tier) return invStatusFilter.N !== false;
+      return invStatusFilter[tier.key] !== false;
+    });
+  }, [invSites, invStatusFilter, layerVisibility.invertebrates]);
 
   // Get status colour for a scored point
   const getStatusColor = useCallback(
@@ -518,8 +524,8 @@ function MapContents({
         </MarkerClusterGroup>
       )}
 
-      {/* Invertebrate Layer with BMWP health indicator */}
-      {layerVisibility.invertebrates && (
+      {/* Invertebrate Layer with BMWP health-coloured backgrounds */}
+      {layerVisibility.invertebrates && visibleInvSites.length > 0 && (
         <MarkerClusterGroup
           chunkedLoading
           maxClusterRadius={60}
@@ -534,7 +540,7 @@ function MapContents({
             )
           }
         >
-          {invSites.map((site, i) => {
+          {visibleInvSites.map((site, i) => {
             const coords = site.coords;
             if (!coords) return null;
 
@@ -542,17 +548,7 @@ function MapContents({
               selectedItem?.type === "invertebrates" &&
               selectedItem?.data?.siteId === site.siteId;
 
-            // BMWP health indicator color
-            let healthColor = null;
-            if (site.latestBmwp != null) {
-              if (site.latestBmwp >= 100) {
-                healthColor = "#22c55e"; // Green - good
-              } else if (site.latestBmwp >= 50) {
-                healthColor = "#eab308"; // Yellow - moderate
-              } else {
-                healthColor = "#ef4444"; // Red - poor
-              }
-            }
+            const tier = getBmwpTier(site.latestBmwp);
 
             return (
               <Marker
@@ -561,8 +557,7 @@ function MapContents({
                 icon={createEmojiIcon(
                   LAYER_STYLES.invertebrates.emoji,
                   isSelected,
-                  null,
-                  healthColor
+                  tier?.color || null
                 )}
                 eventHandlers={{
                   click: () =>
@@ -580,7 +575,8 @@ function MapContents({
                       __html: tooltipContent(
                         site.name,
                         "invertebrates",
-                        site.area
+                        site.area,
+                        tier ? { label: tier.label, color: tier.color } : null
                       ),
                     }}
                   />
@@ -615,6 +611,14 @@ export default function MapView() {
     B: true,
     U: true,
   });
+  const [invStatusFilter, setInvStatusFilter] = useState({
+    E: true,
+    G: true,
+    M: true,
+    P: true,
+    B: true,
+    N: true,
+  });
 
   // Load WQ index + config at top level so we can pass to both LayerToggle and MapContents
   const { wqPoints, wqLookup, wqConfig, totalCount: wqScoredCount, getPointDetail, loading: wqLoading } = useWqIndex();
@@ -628,6 +632,13 @@ export default function MapView() {
 
   const handleStatusToggle = (statusCode) => {
     setStatusFilter((prev) => ({
+      ...prev,
+      [statusCode]: !prev[statusCode],
+    }));
+  };
+
+  const handleInvStatusToggle = (statusCode) => {
+    setInvStatusFilter((prev) => ({
       ...prev,
       [statusCode]: !prev[statusCode],
     }));
@@ -661,6 +672,7 @@ export default function MapView() {
           setSelectedItem={setSelectedItem}
           onCountsChange={setLayerCounts}
           statusFilter={statusFilter}
+          invStatusFilter={invStatusFilter}
           wqPoints={wqPoints}
           wqLookup={wqLookup}
           wqConfig={wqConfig}
@@ -675,6 +687,8 @@ export default function MapView() {
         statusFilter={statusFilter}
         onStatusToggle={handleStatusToggle}
         statusConfig={wqConfig?.statuses}
+        invStatusFilter={invStatusFilter}
+        onInvStatusToggle={handleInvStatusToggle}
       />
 
       <SidePanel
