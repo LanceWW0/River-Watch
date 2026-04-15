@@ -34,7 +34,26 @@ const LAYERS = [
   },
 ];
 
-export default function LayerToggle({ layers, onToggle, counts = {} }) {
+// Status filter order and short codes
+// Display labels for status codes. "High" in WFD jargon → "Excellent" for clarity.
+// configKey maps to the key in wq_config.json for colour lookup.
+const STATUS_ORDER = [
+  { code: "H", label: "Excellent", configKey: "High" },
+  { code: "G", label: "Good", configKey: "Good" },
+  { code: "M", label: "Moderate", configKey: "Moderate" },
+  { code: "P", label: "Poor", configKey: "Poor" },
+  { code: "B", label: "Bad", configKey: "Bad" },
+  { code: "U", label: "Unscored", color: "#9ca3af" },
+];
+
+export default function LayerToggle({
+  layers,
+  onToggle,
+  counts = {},
+  statusFilter = {},
+  onStatusToggle,
+  statusConfig,
+}) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -84,115 +103,162 @@ export default function LayerToggle({ layers, onToggle, counts = {} }) {
           {LAYERS.map((layer) => {
             const isActive = layers[layer.key];
             const count = counts[layer.key];
+            const isWq = layer.key === "waterQuality";
 
             return (
-              <label
-                key={layer.key}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  cursor: "pointer",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = "#f8fafc")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
-                {/* Custom checkbox */}
-                <div
+              <div key={layer.key}>
+                <label
                   style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 4,
-                    border: `2px solid ${isActive ? layer.color : "#cbd5e1"}`,
-                    background: isActive ? layer.color : "transparent",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    transition: "all 0.15s",
-                    flexShrink: 0,
+                    gap: 10,
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    transition: "background 0.15s",
                   }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "#f8fafc")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
                 >
-                  {isActive && (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                    >
-                      <path
-                        d="M2.5 6L5 8.5L9.5 4"
-                        stroke="white"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  )}
-                </div>
-
-                {/* Emoji indicator */}
-                <span
-                  style={{
-                    fontSize: 16,
-                    opacity: isActive ? 1 : 0.4,
-                    transition: "opacity 0.15s",
-                  }}
-                >
-                  {layer.emoji}
-                </span>
-
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={() => onToggle(layer.key)}
-                  style={{ display: "none" }}
-                />
-
-                {/* Label and count */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Custom checkbox */}
                   <div
                     style={{
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: isActive ? "#1e293b" : "#64748b",
+                      width: 18,
+                      height: 18,
+                      borderRadius: 4,
+                      border: `2px solid ${isActive ? layer.color : "#cbd5e1"}`,
+                      background: isActive ? layer.color : "transparent",
                       display: "flex",
                       alignItems: "center",
-                      gap: 6,
+                      justifyContent: "center",
+                      transition: "all 0.15s",
+                      flexShrink: 0,
                     }}
                   >
-                    {layer.label}
-                    {count !== undefined && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          color: "#94a3b8",
-                          background: "#f1f5f9",
-                          padding: "1px 5px",
-                          borderRadius: 99,
-                        }}
+                    {isActive && (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 12 12"
+                        fill="none"
                       >
-                        {count.toLocaleString()}
-                      </span>
+                        <path
+                          d="M2.5 6L5 8.5L9.5 4"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     )}
                   </div>
-                  <div
+
+                  {/* Emoji indicator */}
+                  <span
                     style={{
-                      fontSize: 10,
-                      color: "#94a3b8",
-                      marginTop: 1,
+                      fontSize: 16,
+                      opacity: isActive ? 1 : 0.4,
+                      transition: "opacity 0.15s",
                     }}
                   >
-                    {layer.description}
+                    {layer.emoji}
+                  </span>
+
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={() => onToggle(layer.key)}
+                    style={{ display: "none" }}
+                  />
+
+                  {/* Label and count */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: isActive ? "#1e293b" : "#64748b",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      {layer.label}
+                      {count !== undefined && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: "#94a3b8",
+                            background: "#f1f5f9",
+                            padding: "1px 5px",
+                            borderRadius: 99,
+                          }}
+                        >
+                          {count.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: "#94a3b8",
+                        marginTop: 1,
+                      }}
+                    >
+                      {layer.description}
+                    </div>
                   </div>
-                </div>
-              </label>
+                </label>
+
+                {/* Status filter chips — only for Water Quality when active */}
+                {isWq && isActive && onStatusToggle && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 4,
+                      padding: "4px 12px 8px 50px",
+                      maxWidth: 220,
+                    }}
+                  >
+                    {STATUS_ORDER.map(({ code, label, configKey, color: hardColor }) => {
+                      const active = statusFilter[code] !== false;
+                      const color = hardColor || statusConfig?.[configKey]?.color || "#9ca3af";
+                      return (
+                        <button
+                          key={code}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onStatusToggle(code);
+                          }}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            padding: "2px 8px",
+                            borderRadius: 99,
+                            border: `1.5px solid ${color}`,
+                            background: active ? color : "transparent",
+                            color: active ? "white" : color,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                            opacity: active ? 1 : 0.5,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

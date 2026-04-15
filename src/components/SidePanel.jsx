@@ -96,14 +96,14 @@ const INV_INDEX_INFO = {
   },
 };
 
-// Key determinands the public would care about, with WFD-style thresholds 
+// Key determinands the public would care about, with WFD-style thresholds
 const DETERMINAND_INFO = {
   "0111": {
     name: "Ammonia",
     unit: "mg/l",
     description: "Sewage & pollution indicator. Lower is better.",
     thresholds: [
-      { value: 0.3, label: "High (Good)", color: "#22c55e" },
+      { value: 0.3, label: "Excellent", color: "#22c55e" },
       { value: 0.6, label: "Good", color: "#84cc16" },
       { value: 1.1, label: "Moderate", color: "#eab308" },
       { value: 2.5, label: "Poor", color: "#f97316" },
@@ -138,7 +138,7 @@ const DETERMINAND_INFO = {
     unit: "mg/l",
     description: "Causes algal blooms. Lower is better.",
     thresholds: [
-      { value: 0.036, label: "High (Good)", color: "#22c55e" },
+      { value: 0.036, label: "Excellent", color: "#22c55e" },
       { value: 0.069, label: "Good", color: "#84cc16" },
       { value: 0.174, label: "Moderate", color: "#eab308" },
       { value: 0.466, label: "Poor", color: "#f97316" },
@@ -173,6 +173,36 @@ const DETERMINAND_PRIORITY = [
   "0076",
   "0061",
 ];
+
+// Priority order for semantic determinand keys (from wq_config)
+const WQ_DETERMINAND_PRIORITY = [
+  "ammonia",
+  "do_percent",
+  "bod",
+  "phosphate",
+  "nitrate",
+  "ph",
+  "temperature",
+  "conductivity",
+  "ss",
+  "total_oxidised_n",
+  "ss_alt",
+];
+
+// Descriptions for semantic determinand keys
+const WQ_DETERMINAND_DESCRIPTIONS = {
+  ammonia: "Sewage & pollution indicator. Lower is better.",
+  do_percent: "Essential for aquatic life. Higher is better.",
+  bod: "Organic pollution. Lower is better.",
+  phosphate: "Causes algal blooms. Lower is better.",
+  nitrate: "Agricultural runoff indicator. High levels harm ecosystems.",
+  ph: "Acidity/alkalinity. Rivers are typically 6.5–8.5.",
+  temperature: "Affects dissolved oxygen and aquatic life.",
+  conductivity: "Measure of dissolved ions in water.",
+  ss: "Suspended particles in water.",
+  total_oxidised_n: "Combined nitrate and nitrite levels.",
+  ss_alt: "Suspended solids (alternative measure).",
+};
 
 function parseObservations(members) {
   const grouped = {};
@@ -216,6 +246,43 @@ function sortGroups(groups) {
     if (bIdx !== -1) return 1;
     return a.name.localeCompare(b.name);
   });
+}
+
+function sortWqGroups(groups) {
+  return Object.values(groups).sort((a, b) => {
+    const aIdx = WQ_DETERMINAND_PRIORITY.indexOf(a.code);
+    const bIdx = WQ_DETERMINAND_PRIORITY.indexOf(b.code);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/**
+ * Build threshold array from wqConfig for DeterminandChart.
+ * Converts wqConfig.thresholds[key] to the [{value, label, color}] format.
+ */
+function buildThresholdsFromConfig(key, wqConfig) {
+  if (!wqConfig?.thresholds?.[key]) return [];
+  const t = wqConfig.thresholds[key];
+  const statusColors = {
+    High: "#60a5fa",
+    Good: "#22c55e",
+    Moderate: "#eab308",
+    Poor: "#f97316",
+    Bad: "#dc2626",
+  };
+  const statusLabels = ["Excellent", "Good", "Moderate", "Poor"];
+
+  if (t.direction === "range") return []; // pH range-based, skip threshold lines
+
+  const boundaries = t.boundaries || [];
+  return boundaries.map((val, i) => ({
+    value: val,
+    label: statusLabels[i] || "",
+    color: statusColors[statusLabels[i]] || "#9ca3af",
+  }));
 }
 
 /* ── Plain-English summary generator ───────────────────────── */
@@ -322,7 +389,7 @@ function generateSummary(observations) {
   for (const code of trendCodes) {
     const info = DETERMINAND_INFO[code];
     const data = observations[code].data;
-    if (data.length === 0) continue; 
+    if (data.length === 0) continue;
     const latest = data[data.length - 1].value;
 
     let status;
@@ -546,12 +613,179 @@ function SummaryBlock({ summary, loading }) {
   );
 }
 
+/* ── Determinand breakdown from tile detail ───────────────── */
+
+const TREND_ARROWS = {
+  improving: { arrow: "\u2191", color: "#16a34a", label: "Improving" },
+  declining: { arrow: "\u2193", color: "#dc2626", label: "Declining" },
+  stable: { arrow: "\u2192", color: "#64748b", label: "Stable" },
+  insufficient_data: { arrow: "\u2022", color: "#94a3b8", label: "Insufficient data" },
+};
+
+function DeterminandBreakdown({ detail, wqConfig, worstDeterminand }) {
+  if (!detail?.determinands) return null;
+
+  const statusColors = {};
+  if (wqConfig?.statuses) {
+    for (const [key, val] of Object.entries(wqConfig.statuses)) {
+      statusColors[key] = val.color;
+    }
+  }
+
+  const entries = Object.entries(detail.determinands);
+  // Sort by WQ priority
+  entries.sort((a, b) => {
+    const aIdx = WQ_DETERMINAND_PRIORITY.indexOf(a[0]);
+    const bIdx = WQ_DETERMINAND_PRIORITY.indexOf(b[0]);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return 0;
+  });
+
+  return (
+    <div
+      style={{
+        marginBottom: 20,
+        animation: "fadeInUp 0.35s ease both",
+      }}
+    >
+      <h4
+        style={{
+          margin: "0 0 8px",
+          fontSize: 12,
+          fontWeight: 600,
+          color: "#64748b",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+        }}
+      >
+        Determinand Summary
+      </h4>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {entries.map(([key, det]) => {
+          const isWorst = key === worstDeterminand;
+          const statusColor = statusColors[det.status] || "#9ca3af";
+          const trend = TREND_ARROWS[det.trend] || TREND_ARROWS.insufficient_data;
+
+          return (
+            <div
+              key={key}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: isWorst ? "#fef2f2" : "#f8fafc",
+                border: `1px solid ${isWorst ? "#fecaca" : "#e2e8f0"}`,
+              }}
+            >
+              {/* Status dot */}
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: statusColor,
+                  flexShrink: 0,
+                }}
+              />
+
+              {/* Name */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: isWorst ? 700 : 500,
+                    color: "#1e293b",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {det.label || key}
+                  {isWorst && (
+                    <span
+                      style={{
+                        marginLeft: 6,
+                        fontSize: 9,
+                        fontWeight: 600,
+                        color: "#dc2626",
+                        background: "#fee2e2",
+                        padding: "1px 5px",
+                        borderRadius: 99,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Worst
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Trend */}
+              <span
+                style={{
+                  fontSize: 14,
+                  color: trend.color,
+                  flexShrink: 0,
+                }}
+                title={trend.label}
+              >
+                {trend.arrow}
+              </span>
+
+              {/* Mean value */}
+              <div style={{ textAlign: "right", flexShrink: 0, minWidth: 55 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: statusColor }}>
+                  {det.mean != null ? det.mean.toFixed(2) : "–"}
+                </span>
+                <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 2 }}>
+                  {det.unit}
+                </span>
+              </div>
+
+              {/* Status badge */}
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "white",
+                  background: statusColor,
+                  padding: "2px 6px",
+                  borderRadius: 99,
+                  flexShrink: 0,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.03em",
+                }}
+              >
+                {det.status === "High" ? "Excellent" : det.status || "–"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Chart component ───────────────────────────────────────── */
 
-function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hoveredTimestamp, onHoverTimestamp, chartColor = "#3b82f6", dataType = "water-quality" }) {
+function DeterminandChart({
+  group,
+  animDelay = 0,
+  isStreaming,
+  timeDomain,
+  hoveredTimestamp,
+  onHoverTimestamp,
+  chartColor = "#3b82f6",
+  dataType = "water-quality",
+  wqConfig = null,
+}) {
   // Get info based on data type
   let info, displayName, description, thresholds;
-  
+
   if (dataType === "invertebrates") {
     info = INV_INDEX_INFO[group.code];
     displayName = info?.name || group.name;
@@ -562,6 +796,15 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hover
     displayName = group.name || group.code;
     description = "Fish population count over time.";
     thresholds = [];
+  } else if (dataType === "water-quality-static" && wqConfig) {
+    // Semantic key lookup from wqConfig
+    const detConfig = wqConfig.determinands?.[group.code];
+    displayName = detConfig?.label || group.name || group.code;
+    description = WQ_DETERMINAND_DESCRIPTIONS[group.code] || "";
+    thresholds = buildThresholdsFromConfig(group.code, wqConfig);
+    // Check if this determinand has higher_is_better direction
+    const direction = wqConfig.thresholds?.[group.code]?.direction;
+    info = direction === "higher_is_better" ? { goodAbove: thresholds[0]?.value } : null;
   } else {
     info = DETERMINAND_INFO[group.code];
     displayName = info?.name || group.name;
@@ -595,13 +838,13 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hover
       for (const t of sorted) {
         if (latestValue > t.value) {
           statusColor =
-            t.color === "#22c55e" || t.color === "#84cc16"
+            t.color === "#22c55e" || t.color === "#84cc16" || t.color === "#2563eb"
               ? "#eab308"
               : t.color === "#eab308"
                 ? "#f97316"
                 : "#ef4444";
           statusLabel =
-            t.color === "#22c55e" || t.color === "#84cc16"
+            t.color === "#22c55e" || t.color === "#84cc16" || t.color === "#2563eb"
               ? "Moderate"
               : t.color === "#eab308"
                 ? "Poor"
@@ -781,12 +1024,12 @@ function DeterminandChart({ group, animDelay = 0, isStreaming, timeDomain, hover
 
 function generateFishSummary(data, siteInfo) {
   if (!data || data.length === 0) return null;
-  
+
   const speciesCount = data.length;
   let totalSurveys = 0;
   let earliestTs = Infinity;
   let latestTs = -Infinity;
-  
+
   for (const species of data) {
     for (const d of species.data) {
       if (d.timestamp < earliestTs) earliestTs = d.timestamp;
@@ -794,10 +1037,10 @@ function generateFishSummary(data, siteInfo) {
     }
     totalSurveys = Math.max(totalSurveys, species.data.length);
   }
-  
+
   const earliestYear = new Date(earliestTs).getFullYear();
   const latestYear = new Date(latestTs).getFullYear();
-  
+
   // Find dominant species (highest total count)
   let dominant = data[0];
   let maxTotal = 0;
@@ -808,29 +1051,29 @@ function generateFishSummary(data, siteInfo) {
       dominant = species;
     }
   }
-  
+
   const sentences = [];
   sentences.push(`This site has recorded ${speciesCount} fish species across ${totalSurveys} surveys from ${earliestYear} to ${latestYear}.`);
-  
+
   if (dominant) {
     const dominantName = dominant.code || dominant.name;
     sentences.push(`${dominantName} is the most commonly recorded species.`);
   }
-  
+
   return sentences.join(" ");
 }
 
 function generateInvSummary(data, siteInfo) {
   if (!data || data.length === 0) return null;
-  
+
   const sentences = [];
   const bmwp = data.find(d => d.code === "BMWP_TOTAL");
   const aspt = data.find(d => d.code === "BMWP_ASPT" || d.code === "WHPT_ASPT");
-  
+
   if (siteInfo?.totalSamples) {
     sentences.push(`This site has been sampled ${siteInfo.totalSamples} times.`);
   }
-  
+
   if (bmwp && bmwp.data.length > 0) {
     const latest = bmwp.data[bmwp.data.length - 1].value;
     let quality = "poor";
@@ -838,28 +1081,31 @@ function generateInvSummary(data, siteInfo) {
     else if (latest >= 50) quality = "moderate";
     sentences.push(`The latest BMWP score of ${latest} indicates ${quality} river health.`);
   }
-  
+
   if (aspt && aspt.data.length > 0) {
     const latest = aspt.data[aspt.data.length - 1].value.toFixed(2);
     const cleanWater = parseFloat(latest) >= 6 ? "suggesting clean water" : "indicating some pollution pressure";
     sentences.push(`Average Score Per Taxon is ${latest}, ${cleanWater}.`);
   }
-  
+
   return sentences.join(" ");
 }
 
 /* ── Side panel ────────────────────────────────────────────── */
 
-export default function SidePanel({ selectedItem, onClose }) {
+export default function SidePanel({ selectedItem, onClose, wqConfig, getPointDetail }) {
   const [observations, setObservations] = useState({});
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ loaded: 0, total: 0 });
   const [hoveredTimestamp, setHoveredTimestamp] = useState(null);
+  const [tileDetail, setTileDetail] = useState(null);
+  const [useStaticData, setUseStaticData] = useState(false);
   const abortRef = useRef(null);
 
   const dataType = selectedItem?.type || "water-quality";
   const itemData = selectedItem?.data;
   const layerConfig = LAYER_CONFIG[dataType];
+  const isScored = dataType === "water-quality" && itemData?.scored;
 
   useEffect(() => {
     if (!selectedItem) return;
@@ -871,19 +1117,77 @@ export default function SidePanel({ selectedItem, onClose }) {
     setLoading(true);
     setProgress({ loaded: 0, total: 0 });
     setObservations({});
+    setTileDetail(null);
+    setUseStaticData(false);
 
     async function fetchData() {
       try {
         if (dataType === "water-quality") {
-          // Existing API-based fetch for water quality
+          // If scored, try loading tile detail + static timeseries first
+          if (isScored && getPointDetail) {
+            // Load tile detail for determinand breakdown
+            const detail = await getPointDetail(
+              itemData.id,
+              itemData.lat,
+              itemData.lon
+            );
+            if (!controller.signal.aborted) {
+              setTileDetail(detail);
+            }
+
+            // Try static timeseries
+            const safeId = itemData.id.replace(/\//g, "_");
+            try {
+              const tsRes = await fetch(`/data/wq/timeseries/${safeId}.json`, {
+                signal: controller.signal,
+              });
+              if (tsRes.ok) {
+                const tsData = await tsRes.json();
+                const grouped = {};
+                for (const [key, series] of Object.entries(tsData)) {
+                  const detConfig = wqConfig?.determinands?.[key];
+                  grouped[key] = {
+                    code: key,
+                    name: detConfig?.label || key,
+                    unit: detConfig?.unit || "",
+                    data: series.dates.map((d, i) => ({
+                      date: d,
+                      timestamp: new Date(d).getTime(),
+                      value: series.values[i],
+                    })),
+                  };
+                }
+                // Sort each group's data by timestamp
+                for (const g of Object.values(grouped)) {
+                  g.data.sort((a, b) => a.timestamp - b.timestamp);
+                }
+                if (!controller.signal.aborted) {
+                  setObservations(grouped);
+                  setUseStaticData(true);
+                  setProgress({
+                    loaded: Object.keys(grouped).length,
+                    total: Object.keys(grouped).length,
+                  });
+                  setLoading(false);
+                }
+                return;
+              }
+            } catch (err) {
+              if (err.name === "AbortError") return;
+              // Fall through to EA API
+            }
+          }
+
+          // Fallback: EA API pagination
           const point = itemData;
+          const notation = point.notation || point.id;
           let allMembers = [];
           let skip = 0;
           let total = Infinity;
 
           while (skip < total) {
             const res = await fetch(
-              `/api/observation?notation=${point.notation}&skip=${skip}&limit=250`,
+              `/api/observation?notation=${notation}&skip=${skip}&limit=250`,
               {
                 headers: {
                   accept: "application/ld+json",
@@ -968,7 +1272,7 @@ export default function SidePanel({ selectedItem, onClose }) {
     fetchData();
 
     return () => controller.abort();
-  }, [selectedItem, dataType, itemData]);
+  }, [selectedItem, dataType, itemData, isScored, getPointDetail, wqConfig]);
 
   const summary = useMemo(() => {
     if (loading) return null;
@@ -983,25 +1287,63 @@ export default function SidePanel({ selectedItem, onClose }) {
 
   if (!selectedItem) return null;
 
-  const sortedGroups = dataType === "water-quality" 
-    ? sortGroups(observations) 
-    : Object.values(observations).sort((a, b) => a.name.localeCompare(b.name));
+  const effectiveDataType = useStaticData ? "water-quality-static" : dataType;
+  const sortedGroups =
+    effectiveDataType === "water-quality-static"
+      ? sortWqGroups(observations)
+      : effectiveDataType === "water-quality"
+        ? sortGroups(observations)
+        : Object.values(observations).sort((a, b) =>
+            a.name.localeCompare(b.name)
+          );
   const timeDomain = computeSharedTimeDomain(observations);
   const hasCharts = sortedGroups.length > 0;
-  
+
   // Get display info based on data type
   let siteName, siteSubtitle, statusBadge, regionBadge;
+
+  // Overall health status for scored WQ points
+  // configKey looks up wq_config.json (uses "High"), displayLabel is user-facing ("Excellent")
+  const STATUS_CONFIG_KEYS = { H: "High", G: "Good", M: "Moderate", P: "Poor", B: "Bad" };
+  const STATUS_DISPLAY_LABELS = { H: "Excellent", G: "Good", M: "Moderate", P: "Poor", B: "Bad" };
+  let overallStatusBadge = null;
+
   if (dataType === "water-quality") {
     const point = itemData;
-    const isOpen = point.samplingPointStatus?.notation !== "C";
-    siteName = point.prefLabel || point.altLabel;
-    siteSubtitle = point.samplingPointType?.prefLabel;
-    statusBadge = {
-      label: isOpen ? "Active" : "Closed",
-      bg: isOpen ? "#dcfce7" : "#f3f4f6",
-      color: isOpen ? "#166534" : "#6b7280",
-    };
-    regionBadge = point.region?.prefLabel;
+
+    if (isScored) {
+      // Scored point — show status prominently
+      const statusLabel = STATUS_DISPLAY_LABELS[point.s] || "Unknown";
+      const configKey = STATUS_CONFIG_KEYS[point.s] || "Unknown";
+      const statusColor = wqConfig?.statuses?.[configKey]?.color || "#9ca3af";
+      const worstDetLabel = wqConfig?.determinands?.[point.w]?.label || point.w;
+
+      siteName = tileDetail?.label || point.id;
+      siteSubtitle = tileDetail?.type || null;
+
+      overallStatusBadge = {
+        label: statusLabel,
+        color: statusColor,
+      };
+
+      statusBadge = {
+        label: statusLabel,
+        bg: statusColor,
+        color: "white",
+      };
+      regionBadge = `${point.n} samples · Latest: ${point.d}`;
+    } else {
+      // Unscored point — existing behaviour
+      const isOpen = point.samplingPointStatus?.notation !== "C";
+      siteName = point.prefLabel || point.altLabel;
+      siteSubtitle = point.samplingPointType?.prefLabel;
+      statusBadge = {
+        label: isOpen ? "Active" : "Closed",
+        bg: isOpen ? "#dcfce7" : "#f3f4f6",
+        color: isOpen ? "#166534" : "#6b7280",
+      };
+      regionBadge = point.region?.prefLabel;
+    }
   } else if (dataType === "fish") {
     siteName = itemData.name;
     siteSubtitle = itemData.waterbody ? `Waterbody: ${itemData.waterbody}` : itemData.area;
@@ -1050,7 +1392,7 @@ export default function SidePanel({ selectedItem, onClose }) {
         style={{
           padding: "16px 20px",
           borderBottom: "1px solid #e2e8f0",
-          borderLeft: `4px solid ${layerConfig.color}`,
+          borderLeft: `4px solid ${overallStatusBadge?.color || layerConfig.color}`,
           background: layerConfig.bgColor,
           flexShrink: 0,
         }}
@@ -1109,22 +1451,56 @@ export default function SidePanel({ selectedItem, onClose }) {
                 {siteSubtitle}
               </p>
             )}
-            <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-              <span
+
+            {/* Overall health status badge for scored points */}
+            {overallStatusBadge && (
+              <div
                 style={{
-                  display: "inline-block",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "2px 8px",
+                  marginTop: 8,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 12px",
                   borderRadius: 99,
-                  background: statusBadge.bg,
-                  color: statusBadge.color,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
+                  background: overallStatusBadge.color,
+                  color: "white",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
                 }}
               >
-                {statusBadge.label}
-              </span>
+                {overallStatusBadge.label}
+              </div>
+            )}
+
+            {/* Worst determinand for scored points */}
+            {isScored && itemData.w && wqConfig?.determinands?.[itemData.w] && (
+              <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>
+                Worst indicator:{" "}
+                <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                  {wqConfig.determinands[itemData.w].label}
+                </span>
+              </div>
+            )}
+
+            <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              {!overallStatusBadge && (
+                <span
+                  style={{
+                    display: "inline-block",
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 99,
+                    background: statusBadge.bg,
+                    color: statusBadge.color,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {statusBadge.label}
+                </span>
+              )}
               {regionBadge && (
                 <span
                   style={{
@@ -1245,6 +1621,15 @@ export default function SidePanel({ selectedItem, onClose }) {
           padding: "16px 20px",
         }}
       >
+        {/* Determinand breakdown for scored points */}
+        {isScored && tileDetail && (
+          <DeterminandBreakdown
+            detail={tileDetail}
+            wqConfig={wqConfig}
+            worstDeterminand={itemData.w}
+          />
+        )}
+
         {/* Plain-English summary */}
         <SummaryBlock summary={summary} loading={loading} />
 
@@ -1259,7 +1644,8 @@ export default function SidePanel({ selectedItem, onClose }) {
             hoveredTimestamp={hoveredTimestamp}
             onHoverTimestamp={setHoveredTimestamp}
             chartColor={layerConfig.chartColor}
-            dataType={dataType}
+            dataType={effectiveDataType}
+            wqConfig={wqConfig}
           />
         ))}
 
