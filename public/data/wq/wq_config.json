@@ -1,0 +1,126 @@
+{
+  "statuses": {
+    "High": {
+      "color": "#60a5fa",
+      "label": "High",
+      "score": 5
+    },
+    "Good": {
+      "color": "#16a34a",
+      "label": "Good",
+      "score": 4
+    },
+    "Moderate": {
+      "color": "#f59e0b",
+      "label": "Moderate",
+      "score": 3
+    },
+    "Poor": {
+      "color": "#f97316",
+      "label": "Poor",
+      "score": 2
+    },
+    "Bad": {
+      "color": "#dc2626",
+      "label": "Bad",
+      "score": 1
+    }
+  },
+  "determinands": {
+    "temperature": {
+      "label": "Temperature",
+      "unit": "\u00b0C"
+    },
+    "nitrate": {
+      "label": "Nitrate as N",
+      "unit": "mg/l"
+    },
+    "ss": {
+      "label": "Suspended Solids at 105C",
+      "unit": "mg/l"
+    },
+    "ammonia": {
+      "label": "Ammoniacal Nitrogen as N",
+      "unit": "mg/l"
+    },
+    "do_percent": {
+      "label": "Dissolved Oxygen (% sat)",
+      "unit": "%"
+    },
+    "phosphate": {
+      "label": "Orthophosphate, reactive as P",
+      "unit": "mg/l"
+    },
+    "bod": {
+      "label": "BOD 5 Day ATU",
+      "unit": "mg/l"
+    },
+    "ph": {
+      "label": "pH",
+      "unit": "pH"
+    },
+    "conductivity": {
+      "label": "Conductivity at 25C",
+      "unit": "\u00b5S/cm"
+    },
+    "ss_alt": {
+      "label": "Suspended Solids (alt)",
+      "unit": "mg/l"
+    },
+    "total_oxidised_n": {
+      "label": "Nitrogen, Total Oxidised as N",
+      "unit": "mg/l"
+    }
+  },
+  "thresholds": {
+    "phosphate": {
+      "boundaries": [
+        0.036,
+        0.12,
+        0.25,
+        1.0
+      ],
+      "direction": "lower_is_better"
+    },
+    "ammonia": {
+      "boundaries": [
+        0.3,
+        0.6,
+        1.1,
+        2.5
+      ],
+      "direction": "lower_is_better"
+    },
+    "do_percent": {
+      "boundaries": [
+        80,
+        70,
+        54,
+        45
+      ],
+      "direction": "higher_is_better"
+    },
+    "bod": {
+      "boundaries": [
+        4.0,
+        5.0,
+        6.5,
+        9.0
+      ],
+      "direction": "lower_is_better"
+    },
+    "ph": {
+      "range_good": [
+        6.0,
+        9.0
+      ],
+      "range_high": [
+        6.5,
+        8.5
+      ],
+      "direction": "range"
+    }
+  },
+  "total_points": 5462,
+  "processed_at": "2026-04-13T20:38:07.308425"
+}
