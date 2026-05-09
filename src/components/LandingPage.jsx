@@ -161,6 +161,260 @@ function FeatureCard({ icon: Icon, title, description, delay, visible }) {
   );
 }
 
+/* ── Impact section components ─────────────────────────────── */
+
+// Real numbers from the wq_index.json analysis
+const STATUS_BREAKDOWN = [
+  { key: "B", label: "Bad", count: 2115, color: "#dc2626", description: "Severely impacted" },
+  { key: "P", label: "Poor", count: 613, color: "#f97316", description: "Failing standards" },
+  { key: "M", label: "Moderate", count: 452, color: "#f59e0b", description: "Mixed picture" },
+  { key: "G", label: "Good", count: 766, color: "#16a34a", description: "Meeting standards" },
+  { key: "H", label: "Excellent", count: 1311, color: "#60a5fa", description: "Near-pristine" },
+];
+
+const TOP_POLLUTANTS = [
+  { key: "ammonia", label: "Ammonia", count: 2218, hint: "Sewage & farm runoff" },
+  { key: "bod", label: "BOD", count: 1022, hint: "Organic pollution load" },
+  { key: "do_percent", label: "Dissolved Oxygen", count: 915, hint: "Suffocates aquatic life" },
+  { key: "phosphate", label: "Phosphate", count: 840, hint: "Causes algal blooms" },
+  { key: "ph", label: "pH", count: 262, hint: "Acidity / alkalinity" },
+];
+
+function DonutChart({ segments, visible }) {
+  const total = segments.reduce((a, b) => a + b.count, 0);
+  const radius = 70;
+  const stroke = 28;
+  const cx = 100;
+  const cy = 100;
+
+  let accumulated = 0;
+  return (
+    <svg viewBox="0 0 200 200" className="w-full max-w-[260px]" role="img" aria-label="Water quality status breakdown">
+      {/* Track */}
+      <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
+
+      {segments.map((s, i) => {
+        const pct = (s.count / total) * 100;
+        const dashArray = visible ? `${pct} ${100 - pct}` : `0 100`;
+        const offset = -accumulated;
+        accumulated += pct;
+        return (
+          <circle
+            key={s.key}
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={stroke}
+            pathLength="100"
+            strokeDasharray={dashArray}
+            strokeDashoffset={offset}
+            transform={`rotate(-90 ${cx} ${cy})`}
+            strokeLinecap="butt"
+            style={{
+              transition: `stroke-dasharray 1.2s cubic-bezier(0.16, 1, 0.3, 1) ${i * 120}ms`,
+            }}
+          />
+        );
+      })}
+
+      {/* Centre label */}
+      <text
+        x={cx}
+        y={cy - 6}
+        textAnchor="middle"
+        style={{
+          fontFamily: "'DM Serif Display', serif",
+          fontSize: 28,
+          fill: "#0f172a",
+          fontWeight: 700,
+        }}
+      >
+        {total.toLocaleString()}
+      </text>
+      <text
+        x={cx}
+        y={cy + 16}
+        textAnchor="middle"
+        style={{ fontSize: 11, fill: "#64748b", letterSpacing: "0.05em" }}
+      >
+        SCORED SITES
+      </text>
+    </svg>
+  );
+}
+
+function StatusRow({ label, count, color, description, total, delay, visible }) {
+  const pct = ((count / total) * 100).toFixed(1);
+  return (
+    <div
+      className="flex items-center gap-4 py-2 transition-all duration-700 ease-out"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateX(0)" : "translateX(-12px)",
+        transitionDelay: `${delay}ms`,
+      }}
+    >
+      <div
+        className="w-3 h-3 rounded-full flex-shrink-0"
+        style={{ background: color }}
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold text-slate-900">{label}</span>
+          <span className="text-sm tabular-nums text-slate-600">
+            <span className="font-bold" style={{ color }}>
+              {pct}%
+            </span>
+            <span className="text-slate-400 ml-2">{count.toLocaleString()}</span>
+          </span>
+        </div>
+        <div className="text-xs text-slate-500 mt-0.5">{description}</div>
+      </div>
+    </div>
+  );
+}
+
+function PollutantBar({ label, count, hint, max, delay, visible }) {
+  const widthPct = (count / max) * 100;
+  return (
+    <div
+      className="transition-opacity duration-700"
+      style={{
+        opacity: visible ? 1 : 0,
+        transitionDelay: `${delay}ms`,
+      }}
+    >
+      <div className="flex items-baseline justify-between mb-1.5 gap-2">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-sm font-semibold text-slate-900">{label}</span>
+          <span className="text-xs text-slate-500 truncate">{hint}</span>
+        </div>
+        <span className="text-sm font-bold text-slate-900 tabular-nums flex-shrink-0">
+          {count.toLocaleString()}
+          <span className="text-xs font-medium text-slate-400 ml-1">sites</span>
+        </span>
+      </div>
+      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all ease-out"
+          style={{
+            width: visible ? `${widthPct}%` : "0%",
+            background: "linear-gradient(90deg, #f97316, #dc2626)",
+            transitionDuration: "1400ms",
+            transitionDelay: `${delay + 200}ms`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ImpactSection() {
+  const [ref, visible] = useReveal(0.15);
+
+  // Headline animated number: % Poor or Bad
+  const poorBadCount = useCountUp(2728, 1800, visible);
+  const totalScored = STATUS_BREAKDOWN.reduce((a, b) => a + b.count, 0);
+  const maxPollutant = TOP_POLLUTANTS[0].count;
+
+  return (
+    <section
+      className="py-24 px-4 bg-gradient-to-b from-white to-slate-50"
+      ref={ref}
+    >
+      <div className="max-w-6xl mx-auto">
+        {/* Eyebrow */}
+        <div className="text-center mb-3">
+          <span className="inline-block text-xs font-semibold tracking-widest text-teal-700 uppercase">
+            What the data shows
+          </span>
+        </div>
+
+        {/* Headline */}
+        <h2
+          className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 text-center mb-4 leading-tight"
+          style={{ fontFamily: "'DM Serif Display', serif" }}
+        >
+          Over half of monitored waters score{" "}
+          <span className="text-orange-600">Poor</span>
+          {" or "}
+          <span className="text-red-600">Bad</span>
+          .
+        </h2>
+        <p className="text-center text-slate-500 mb-16 max-w-2xl mx-auto leading-relaxed">
+          We pulled health classifications for{" "}
+          <span className="font-semibold text-slate-700">5,462</span> Environment
+          Agency monitoring sites across England.{" "}
+          <span className="font-semibold text-slate-700">
+            {poorBadCount.toLocaleString()} ({((2728 / totalScored) * 100).toFixed(1)}%)
+          </span>{" "}
+          fall below acceptable health standards.
+        </p>
+
+        {/* Donut + breakdown */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-20">
+          <div className="flex justify-center">
+            <DonutChart segments={STATUS_BREAKDOWN} visible={visible} />
+          </div>
+          <div className="space-y-1">
+            <h3
+              className="text-xl font-bold text-slate-900 mb-4"
+              style={{ fontFamily: "'DM Serif Display', serif" }}
+            >
+              Health classification breakdown
+            </h3>
+            {STATUS_BREAKDOWN.map((s, i) => {
+              const { key, ...rest } = s;
+              return (
+                <StatusRow
+                  key={key}
+                  {...rest}
+                  total={totalScored}
+                  delay={i * 100}
+                  visible={visible}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Top pollutants */}
+        <div className="bg-white/80 backdrop-blur rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200/60">
+          <div className="mb-6">
+            <h3
+              className="text-xl sm:text-2xl font-bold text-slate-900 mb-2"
+              style={{ fontFamily: "'DM Serif Display', serif" }}
+            >
+              The pollutants driving the failures
+            </h3>
+            <p className="text-sm text-slate-500">
+              Each site's worst-scoring indicator. Ammonia and BOD — both
+              markers of sewage and organic pollution — dominate.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {TOP_POLLUTANTS.map((p, i) => {
+              const { key, ...rest } = p;
+              return (
+                <PollutantBar
+                  key={key}
+                  {...rest}
+                  max={maxPollutant}
+                  delay={i * 120}
+                  visible={visible}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Stat block component ──────────────────────────────────── */
 
 function StatBlock({ value, suffix, label, visible }) {
@@ -249,8 +503,11 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Impact / data findings ───────────────────────── */}
+      <ImpactSection />
+
       {/* ── Stats ────────────────────────────────────────── */}
-      <SectionDivider from="#ffffff" to="#0f172a" />
+      <SectionDivider from="#f8fafc" to="#0f172a" />
       <section
         className="py-24 px-4 bg-slate-900 relative overflow-hidden"
         ref={statsRef}
