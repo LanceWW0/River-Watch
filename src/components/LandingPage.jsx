@@ -180,24 +180,51 @@ const TOP_POLLUTANTS = [
   { key: "ph", label: "pH", count: 262, hint: "Acidity / alkalinity" },
 ];
 
-function DonutChart({ segments, visible }) {
+function DonutChart({ segments, visible, hoveredKey, onHover }) {
   const total = segments.reduce((a, b) => a + b.count, 0);
   const radius = 70;
-  const stroke = 28;
+  const baseStroke = 28;
+  const hoverStroke = 38;
   const cx = 100;
   const cy = 100;
 
+  const hoveredSegment = segments.find((s) => s.key === hoveredKey) || null;
+  const centreCount = hoveredSegment ? hoveredSegment.count : total;
+  const centreLabel = hoveredSegment
+    ? hoveredSegment.label.toUpperCase()
+    : "SCORED SITES";
+  const centreColor = hoveredSegment ? hoveredSegment.color : "#0f172a";
+  const centrePct = hoveredSegment
+    ? ((hoveredSegment.count / total) * 100).toFixed(1) + "%"
+    : null;
+
   let accumulated = 0;
   return (
-    <svg viewBox="0 0 200 200" className="w-full max-w-[260px]" role="img" aria-label="Water quality status breakdown">
+    <svg
+      viewBox="0 0 200 200"
+      className="w-full max-w-[260px]"
+      role="img"
+      aria-label="Water quality status breakdown"
+      onMouseLeave={() => onHover(null)}
+    >
       {/* Track */}
-      <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill="none"
+        stroke="#e2e8f0"
+        strokeWidth={baseStroke}
+      />
 
       {segments.map((s, i) => {
         const pct = (s.count / total) * 100;
         const dashArray = visible ? `${pct} ${100 - pct}` : `0 100`;
         const offset = -accumulated;
         accumulated += pct;
+        const isHovered = hoveredKey === s.key;
+        const isDimmed = hoveredKey != null && !isHovered;
+
         return (
           <circle
             key={s.key}
@@ -206,14 +233,17 @@ function DonutChart({ segments, visible }) {
             r={radius}
             fill="none"
             stroke={s.color}
-            strokeWidth={stroke}
+            strokeWidth={isHovered ? hoverStroke : baseStroke}
             pathLength="100"
             strokeDasharray={dashArray}
             strokeDashoffset={offset}
             transform={`rotate(-90 ${cx} ${cy})`}
             strokeLinecap="butt"
+            opacity={isDimmed ? 0.35 : 1}
+            onMouseEnter={() => onHover(s.key)}
             style={{
-              transition: `stroke-dasharray 1.2s cubic-bezier(0.16, 1, 0.3, 1) ${i * 120}ms`,
+              cursor: "pointer",
+              transition: `stroke-dasharray 1.2s cubic-bezier(0.16, 1, 0.3, 1) ${i * 120}ms, stroke-width 0.2s ease, opacity 0.2s ease`,
             }}
           />
         );
@@ -222,47 +252,104 @@ function DonutChart({ segments, visible }) {
       {/* Centre label */}
       <text
         x={cx}
-        y={cy - 6}
+        y={centrePct ? cy - 12 : cy - 6}
         textAnchor="middle"
         style={{
           fontFamily: "'DM Serif Display', serif",
           fontSize: 28,
-          fill: "#0f172a",
+          fill: centreColor,
           fontWeight: 700,
+          transition: "fill 0.2s ease",
+          pointerEvents: "none",
         }}
       >
-        {total.toLocaleString()}
+        {centreCount.toLocaleString()}
       </text>
+      {centrePct && (
+        <text
+          x={cx}
+          y={cy + 8}
+          textAnchor="middle"
+          style={{
+            fontSize: 13,
+            fill: centreColor,
+            fontWeight: 700,
+            pointerEvents: "none",
+          }}
+        >
+          {centrePct}
+        </text>
+      )}
       <text
         x={cx}
-        y={cy + 16}
+        y={centrePct ? cy + 24 : cy + 16}
         textAnchor="middle"
-        style={{ fontSize: 11, fill: "#64748b", letterSpacing: "0.05em" }}
+        style={{
+          fontSize: 11,
+          fill: "#64748b",
+          letterSpacing: "0.05em",
+          pointerEvents: "none",
+        }}
       >
-        SCORED SITES
+        {centreLabel}
       </text>
     </svg>
   );
 }
 
-function StatusRow({ label, count, color, description, total, delay, visible }) {
+function StatusRow({
+  statusKey,
+  label,
+  count,
+  color,
+  description,
+  total,
+  delay,
+  visible,
+  isHovered,
+  isDimmed,
+  onHover,
+}) {
   const pct = ((count / total) * 100).toFixed(1);
   return (
     <div
-      className="flex items-center gap-4 py-2 transition-all duration-700 ease-out"
+      onMouseEnter={() => onHover(statusKey)}
+      onMouseLeave={() => onHover(null)}
+      className="flex items-center gap-4 py-2 px-3 -mx-3 rounded-lg cursor-pointer"
       style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "translateX(0)" : "translateX(-12px)",
-        transitionDelay: `${delay}ms`,
+        opacity: visible ? (isDimmed ? 0.4 : 1) : 0,
+        transform: visible
+          ? isHovered
+            ? "translateX(2px)"
+            : "translateX(0)"
+          : "translateX(-12px)",
+        transition: visible
+          ? `opacity 0.2s ease, transform 0.2s ease, background 0.2s ease, border-color 0.2s ease`
+          : `opacity 700ms ease-out ${delay}ms, transform 700ms ease-out ${delay}ms`,
+        background: isHovered ? `${color}15` : "transparent",
+        borderLeft: isHovered
+          ? `3px solid ${color}`
+          : "3px solid transparent",
       }}
     >
       <div
-        className="w-3 h-3 rounded-full flex-shrink-0"
-        style={{ background: color }}
+        className="rounded-full flex-shrink-0"
+        style={{
+          background: color,
+          width: isHovered ? 14 : 12,
+          height: isHovered ? 14 : 12,
+          boxShadow: isHovered ? `0 0 0 4px ${color}30` : "none",
+          transition: "all 0.2s ease",
+        }}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-semibold text-slate-900">{label}</span>
+          <span
+            className="text-sm font-semibold transition-colors"
+            style={{ color: isHovered ? color : "#0f172a" }}
+          >
+            {label}
+          </span>
           <span className="text-sm tabular-nums text-slate-600">
             <span className="font-bold" style={{ color }}>
               {pct}%
@@ -313,6 +400,7 @@ function PollutantBar({ label, count, hint, max, delay, visible }) {
 
 function ImpactSection() {
   const [ref, visible] = useReveal(0.15);
+  const [hoveredKey, setHoveredKey] = useState(null);
 
   // Headline animated number: % Poor or Bad
   const poorBadCount = useCountUp(2728, 1800, visible);
@@ -356,9 +444,14 @@ function ImpactSection() {
         {/* Donut + breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-20">
           <div className="flex justify-center">
-            <DonutChart segments={STATUS_BREAKDOWN} visible={visible} />
+            <DonutChart
+              segments={STATUS_BREAKDOWN}
+              visible={visible}
+              hoveredKey={hoveredKey}
+              onHover={setHoveredKey}
+            />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1" onMouseLeave={() => setHoveredKey(null)}>
             <h3
               className="text-xl font-bold text-slate-900 mb-4"
               style={{ fontFamily: "'DM Serif Display', serif" }}
@@ -370,10 +463,14 @@ function ImpactSection() {
               return (
                 <StatusRow
                   key={key}
+                  statusKey={key}
                   {...rest}
                   total={totalScored}
                   delay={i * 100}
                   visible={visible}
+                  isHovered={hoveredKey === key}
+                  isDimmed={hoveredKey != null && hoveredKey !== key}
+                  onHover={setHoveredKey}
                 />
               );
             })}
