@@ -18,6 +18,7 @@ export default function SearchBar() {
   const debounceRef = useRef(null);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
+  const skipSearchRef = useRef(false);
 
   // Click-outside to close dropdown
   useEffect(() => {
@@ -33,6 +34,12 @@ export default function SearchBar() {
   // Debounced Nominatim search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    // Skip the search when query was set programmatically by handleSelect
+    if (skipSearchRef.current) {
+      skipSearchRef.current = false;
+      return;
+    }
 
     const trimmed = query.trim();
     if (trimmed.length < 2) {
@@ -81,9 +88,12 @@ export default function SearchBar() {
       map.flyTo([lat, lon], 13, { duration: 1.2 });
     }
 
-    // Show shortened name in the input
+    // Show shortened name in the input. Suppress the next search effect
+    // so the dropdown doesn't re-open with cached results.
     const shortName = result.display_name.split(",")[0];
+    skipSearchRef.current = true;
     setQuery(shortName);
+    setResults([]);
     setOpen(false);
     if (inputRef.current) inputRef.current.blur();
   };

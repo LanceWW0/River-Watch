@@ -132,7 +132,7 @@ export default function LayerToggle({
     <div
       style={{
         position: "absolute",
-        top: "calc(4rem + 76px)",
+        top: "calc(4rem + 68px)",
         left: 12,
         zIndex: 1000,
         background: "white",
