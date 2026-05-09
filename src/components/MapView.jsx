@@ -15,6 +15,7 @@ import "react-leaflet-markercluster/styles";
 import SidePanel from "./SidePanel";
 import RiverLayer from "./RiverLayer";
 import LayerToggle from "./LayerToggle";
+import SearchBar from "./SearchBar";
 import usePointTiles from "../hooks/usePointTiles";
 import useWqIndex from "../hooks/useWqIndex";
 import avatarImg from "../assets/me_snow.jpeg";
@@ -340,6 +341,7 @@ function MapContents({
 
   return (
     <>
+      <SearchBar />
       {layerVisibility.rivers && <RiverLayer />}
 
       {/* Scored Water Quality Layer */}
